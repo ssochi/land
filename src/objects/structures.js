@@ -13,8 +13,9 @@ const SLATE = new THREE.Color('#4f5a63'), DARK = new THREE.Color('#2d2a27');
 // colour for one block: stone tone by hash, darker near the ground; moss on top faces where noise allows
 function stoneColor(R, y, H) { return STONE_A.clone().lerp(STONE_B, R()).multiplyScalar(0.82 + 0.18 * Math.min(1, y / Math.max(H, 0.1) + 0.3)); }
 
-// axis-aligned box rotated by `rot` around Y at centre c (size sx, sy, sz); `top` colours the +Y face
-function addBox(mb, c, sx, sy, sz, rot, col, top) {
+// axis-aligned box rotated by `rot` around Y at centre c (size sx, sy, sz); `top` colours the +Y face;
+// card 2 = masonry: the prop shader paints coursed, filtered block joints over it (src/render/props.js)
+function addBox(mb, c, sx, sy, sz, rot, col, top, card = 0) {
   const cs = Math.cos(rot), sn = Math.sin(rot), hx = sx / 2, hy = sy / 2, hz = sz / 2;
   const P = (x, y, z) => V3(c.x + x * cs - z * sn, c.y + y, c.z + x * sn + z * cs);
   const N = (x, y, z) => V3(x * cs - z * sn, y, x * sn + z * cs);
@@ -28,9 +29,27 @@ function addBox(mb, c, sx, sy, sz, rot, col, top) {
   ];
   faces.forEach(([n, q], f) => {
     const cc = f === 2 && top ? top : col;
-    const ids = q.map(p => mb.v(p.x, p.y, p.z, n.x, n.y, n.z, cc, 0));
+    const ids = q.map(p => mb.v(p.x, p.y, p.z, n.x, n.y, n.z, cc, 0, 0, 0, card));
     mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]);
   });
+}
+
+// tapered square prism (a tower shaft or buttress): centre c0 = [x, z] at y0 moving to c1 at y1, half-widths
+// a0 → a1, split into `rows` bands so vertex colour can darken and green toward the damp base; masonry sides
+function addShaft(mb, c0, c1, y0, y1, a0, a1, rows, colorAt) {
+  const corners = [[1, 1], [1, -1], [-1, -1], [-1, 1]];
+  for (let f = 0; f < 4; f++) {
+    const [ax, az] = corners[f], [bx, bz] = corners[(f + 1) % 4];
+    for (let r = 0; r < rows; r++) {
+      const ya = y0 + (y1 - y0) * r / rows, yb = y0 + (y1 - y0) * (r + 1) / rows;
+      const ta = r / rows, tb = (r + 1) / rows, ha = a0 + (a1 - a0) * ta, hb = a0 + (a1 - a0) * tb;
+      const xa = c0[0] + (c1[0] - c0[0]) * ta, za = c0[1] + (c1[1] - c0[1]) * ta, xb = c0[0] + (c1[0] - c0[0]) * tb, zb = c0[1] + (c1[1] - c0[1]) * tb;
+      const P = [V3(xa + ax * ha, ya, za + az * ha), V3(xa + bx * ha, ya, za + bz * ha), V3(xb + bx * hb, yb, zb + bz * hb), V3(xb + ax * hb, yb, zb + az * hb)];
+      const n = P[1].clone().sub(P[0]).cross(P[3].clone().sub(P[0])).normalize();
+      const ids = P.map(p => mb.v(p.x, p.y, p.z, n.x, n.y, n.z, colorAt(p.y), 0, 0, 0, 2));
+      mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]);
+    }
+  }
 }
 
 // moss on a block's top face where low-frequency noise says so
@@ -126,33 +145,47 @@ export function makeArch(seed) {
   return g;
 }
 
-// watchtower landmark (~26–32 m): tapering coursed shaft with corner buttresses, dark window slits,
-// an overhanging crenellated platform and a slate spire — a silhouette that reads from across the map
+// watchtower landmark (~26–32 m): a continuous tapering shaft with corner buttresses, a plinth and a string
+// course, window slits, a corbelled crenellated platform and a slate spire. Courses and joints are painted by
+// the prop shader (card 2) and filtered by pixel size, so the tower stays clean at any distance instead of
+// the stair-stepped stripes that separate per-course blocks produced.
 export function makeTower(seed) {
   const R = mulberry32(seed), mb = new MB();
-  const H = 22 + R() * 5, w0 = 6.4, w1 = 4.6, ch = 1.1;
-  for (let y = 0; y < H; y += ch) {
-    const u = y / H, w = w0 + (w1 - w0) * u, col = stoneColor(R, y, H);
-    if (y < 6 && vnoise(y * 0.7 + seed, 1.3) > 0.55) col.lerp(MOSS, 0.35);   // damp, mossy base courses
-    addBox(mb, V3((R() - 0.5) * 0.05, y + ch / 2, (R() - 0.5) * 0.05), w - (R() * 0.08), ch - 0.05, w - (R() * 0.08), (R() - 0.5) * 0.012, col, null);
-    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) addBox(mb, V3(sx * w / 2, y + ch / 2, sz * w / 2), 1.0, ch - 0.04, 1.0, 0, stoneColor(R, y, H).multiplyScalar(0.94), null);
+  const H = 22 + R() * 5, w0 = 6.4, w1 = 4.6, half = y => (w0 + (w1 - w0) * y / H) / 2;
+  const base = STONE_A.clone().lerp(STONE_B, 0.55);
+  // damp, mossy foot fading into clean stone; a little darker again just under the platform
+  const tone = y => base.clone().multiplyScalar(0.84 + 0.16 * Math.min(1, y / 6)).lerp(MOSS, 0.4 * (1 - Math.min(1, y / 3.5))).multiplyScalar(y > H - 2 ? 0.9 : 1);
+  addShaft(mb, [0, 0], [0, 0], -0.5, H, half(0), half(H), 8, tone);
+  // buttresses: square piers riding the shaft's corners, thinning a little as they rise
+  const bt = H * 0.94;
+  for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    const k0 = half(0) - 0.2, k1 = half(bt) - 0.2;
+    addShaft(mb, [sx * k0, sz * k0], [sx * k1, sz * k1], -0.5, bt, 0.66, 0.5, 6, y => tone(y).multiplyScalar(0.95));
   }
-  // window slits on each face, every few courses
+  // plinth, and a string course between the second and third rows of windows
+  addShaft(mb, [0, 0], [0, 0], -0.5, 1.3, half(0) + 0.75, half(1.3) + 0.68, 1, y => tone(y).multiplyScalar(0.9));
+  const ys = 13.1;
+  addShaft(mb, [0, 0], [0, 0], ys, ys + 0.35, half(ys) + 0.55, half(ys) + 0.55, 1, () => base.clone().multiplyScalar(0.97));
+  // window slits on each face, every few metres (dark recesses, not masonry)
   for (let y = 5; y < H - 3; y += 5.5) for (let f = 0; f < 4; f++) {
-    const a = f * Math.PI / 2, w = w0 + (w1 - w0) * (y / H), c = V3(Math.cos(a) * (w / 2 + 0.01), y, Math.sin(a) * (w / 2 + 0.01));
+    const a = f * Math.PI / 2, w = half(y) + 0.01, c = V3(Math.cos(a) * w, y, Math.sin(a) * w);
     addBox(mb, c, f % 2 ? 0.7 : 0.06, 1.8, f % 2 ? 0.06 : 0.7, 0, DARK, null);
   }
-  // platform, merlons, spire
+  // platform on corbels, merlons, spire
   const pw = w1 + 2.2;
-  addBox(mb, V3(0, H + 0.4, 0), pw, 0.8, pw, 0, stoneColor(R, H, H), mossTop(0, H, seed, 0.6) || stoneColor(R, H, H));
+  for (let k = 0; k < 4; k++) for (let m = -1; m <= 1; m++) {
+    const a = k * Math.PI / 2, o = half(H) + 0.35, t = m * 1.5;
+    addBox(mb, V3(Math.cos(a) * o + (k % 2 ? t : 0), H - 0.45, Math.sin(a) * o + (k % 2 ? 0 : t)), k % 2 ? 0.45 : 0.7, 0.9, k % 2 ? 0.7 : 0.45, 0, base.clone().multiplyScalar(0.88), null, 2);
+  }
+  addBox(mb, V3(0, H + 0.4, 0), pw, 0.8, pw, 0, base.clone().multiplyScalar(0.98), mossTop(0, H, seed, 0.6) || base.clone(), 2);
   for (let k = 0; k < 4; k++) for (let m = -2; m <= 2; m++) {
     if (R() < 0.12) continue;   // a few merlons have fallen
     const a = k * Math.PI / 2, ox = Math.cos(a) * (pw / 2 - 0.3), oz = Math.sin(a) * (pw / 2 - 0.3), t = m * (pw / 5);
-    addBox(mb, V3(ox + (k % 2 ? t : 0), H + 1.3, oz + (k % 2 ? 0 : t)), 0.6, 1.0, 0.6, 0, stoneColor(R, H, H), null);
+    addBox(mb, V3(ox + (k % 2 ? t : 0), H + 1.3, oz + (k % 2 ? 0 : t)), 0.6, 1.0, 0.6, 0, stoneColor(R, H, H), null, 2);
   }
-  const sp = H + 0.8, tip = V3(0, sp + 7 + R() * 2, 0), base = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => V3(x * (w1 / 2 - 0.2), sp, z * (w1 / 2 - 0.2)));
+  const sp = H + 0.8, tip = V3(0, sp + 7 + R() * 2, 0), sb = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, z]) => V3(x * (w1 / 2 - 0.2), sp, z * (w1 / 2 - 0.2)));
   for (let k = 0; k < 4; k++) {
-    const a = base[k], b = base[(k + 1) % 4], n = b.clone().sub(a).cross(tip.clone().sub(a)).normalize().negate();
+    const a = sb[k], b = sb[(k + 1) % 4], n = b.clone().sub(a).cross(tip.clone().sub(a)).normalize().negate();
     const col = SLATE.clone().multiplyScalar(0.9 + R() * 0.15);
     const ids = [a, b, tip].map(p => mb.v(p.x, p.y, p.z, n.x, n.y, n.z, col, 0));
     mb.tri(ids[0], ids[2], ids[1]);

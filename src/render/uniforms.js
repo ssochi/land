@@ -20,6 +20,6 @@ export const U = {
 
 // grass/terrain/water colors; m.env({ grass, water }) overwrites them in place
 export const PAL = {
-  root: new THREE.Color('#47672a'), mid: new THREE.Color('#6c9636'), tipA: new THREE.Color('#d6d56c'), tipB: new THREE.Color('#a6c257'),
+  root: new THREE.Color('#4f6a2b'), mid: new THREE.Color('#76963a'), tipA: new THREE.Color('#dccf72'), tipB: new THREE.Color('#b2c25c'),
   shallow: new THREE.Color('#58c9bf'), deep: new THREE.Color('#1d5a8c'), sand: new THREE.Color('#cdbf96')
 };

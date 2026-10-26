@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { isSmall } from '../platform.js';
 import { REFLECT } from './layers.js';
+import { depth24 } from './post.js';
 
 // sampled by the water shader: world position on the plane -> reflection texture uv
 export const REFL = { uRefl: { value: null }, uReflMatrix: { value: new THREE.Matrix4() }, uReflOn: { value: 0 }, uReflLevel: { value: 0 } };
@@ -11,6 +12,7 @@ export const REFL = { uRefl: { value: null }, uReflMatrix: { value: new THREE.Ma
 export function createReflection(renderer, scene, camera) {
   const type = renderer.capabilities.isWebGL2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
   const rt = new THREE.WebGLRenderTarget(4, 4, { type });
+  rt.depthTexture = depth24(renderer);
   REFL.uRefl.value = rt.texture;
   const virtualCam = new THREE.PerspectiveCamera();
   virtualCam.layers.set(REFLECT);

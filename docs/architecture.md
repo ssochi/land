@@ -8,9 +8,10 @@ core      随机数、噪声、堆。纯函数，没有状态。
 world     DETAIL / FAR 两层高度网格，派生标量场（WATER、WDIST、FLOW、OCC、COVER、FOREST、PATH），
           折线工具（polyline.js），以及 terrainVer 等构建版本号。heightAt / normalAt / moistureAt 等查询都在这里。
   ↓
-terrain   塑形操作（noise、mountains、peak、hill、flatten、plateau、terrace、smooth、apply）、侵蚀（erode、thermal）、土路（path.js）。
+terrain   塑形操作（noise、mountains、peak、hill、flatten、plateau、terrace、smooth、apply）、侵蚀（erode、thermal）、土路（path.js）、
+          崖面位移（crag.js：网格和 groundAt 共用，物件 / 草 / 第一人称都踩在实际画出的岩面上）。
 water     河道开挖（river.js）、湖泊泛洪（lake.js），水体场的惰性重算（water.js）。
-objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures / undergrowth 生成器）、scatter / place、草叶分布。
+objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures / undergrowth 生成器）、scatter / place、草场烘焙（密度 / 高度 / 地面 / 遮蔽贴图）。
   ↓
 runtime   参数 schema 与校验、scene.js 拿到的 `m` 对象（api.js）、不含渲染的世界生成流程（generate.js）。
   ↓
@@ -33,8 +34,8 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称�
 1. `resetWorld()` 清空世界状态，移除上一次的网格（模型几何体有缓存，保留）。
 2. `runScript(fn, session)`：执行 `scene.js`。每个 `m.*` 调用先按 schema 校验参数、填默认值，再立即执行，并把状态、耗时、备注和行号写进报告。脚本抛错时构建继续，错误带行号写进报告。
 3. `settleWater()`：刷新水体场，把湖和河写进报告。
-4. 物件实例化（`render/props.js`）、草叶分布（`objects/grass.js`）与草网格（`render/grass.js`）。
-5. 地形网格（`render/terrain-mesh.js`，陡坡顶点做崖面位移）、水面和瀑布水雾（`render/water-mesh.js`，同时把湖交给反射）、地平线图（`render/horizon.js`）。
+4. 物件实例化（`render/props.js`）、草场烘焙（`objects/grass.js`）。草叶本身由 `render/grass.js` 每帧在镜头周围按距离分级生成。
+5. 地形网格（`render/terrain-mesh.js`，陡坡顶点做崖面位移）、水面和瀑布（`render/water-mesh.js`：抛物线水帘、落点泡沫、水雾，同时把湖交给反射）、地平线图（`render/horizon.js`）。
 6. 应用 `m.env()`，切到默认镜头，`window.__mapReady = true`，控制台打印 `MAP_REPORT {json}`。
 
 每一帧：更新镜头（第一人称时先按 1/60 s 固定步长推进 walker，相机放在眼睛位置）→ 阴影（只有窗口移动或太阳转动时重画）→ 湖面反射（看不到湖时跳过）→ 主场景 + 后期。哪些物体参与阴影和反射由 three.js 的图层决定，编号在 `render/layers.js`：`SHADOW` 投影，`REFLECT` 出现在湖面倒影里。

@@ -3,12 +3,23 @@ import * as THREE from 'three';
 import { clamp, smooth } from '../core/math.js';
 import { isSmall } from '../platform.js';
 import { U } from './uniforms.js';
+import { A2C } from './props.js';
+
+// three.js backs a render target's depth with a 16-bit renderbuffer unless a depth texture is attached: at the
+// 0.2–4000m camera range that is ~1m of depth resolution at 100m, and distant canopies and pine tiers z-fight
+// (shimmer) as the camera moves. An UnsignedInt depth texture gets a 24-bit buffer, multisampled or not.
+export function depth24(renderer) {
+  if (!renderer.capabilities.isWebGL2 && !renderer.extensions.has('WEBGL_depth_texture')) return null;
+  const d = new THREE.DepthTexture(4, 4); d.type = THREE.UnsignedIntType; return d;
+}
 
 export function createPost(renderer, scene, camera) {
   const gl2 = renderer.capabilities.isWebGL2;
   const type = gl2 ? THREE.HalfFloatType : THREE.UnsignedByteType;
   const rtScene = new THREE.WebGLRenderTarget(4, 4, { type, samples: gl2 && !isSmall ? 4 : 0 });
-  const rtA = new THREE.WebGLRenderTarget(4, 4, { type }), rtB = new THREE.WebGLRenderTarget(4, 4, { type }), rtC = new THREE.WebGLRenderTarget(4, 4, { type });
+  rtScene.depthTexture = depth24(renderer);
+  A2C.value = rtScene.samples > 0 ? 1 : 0;
+  const rtA = new THREE.WebGLRenderTarget(4, 4, { type, depthBuffer: false }), rtB = new THREE.WebGLRenderTarget(4, 4, { type, depthBuffer: false }), rtC = new THREE.WebGLRenderTarget(4, 4, { type, depthBuffer: false });
   const qCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), qScene = new THREE.Scene(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
   quad.frustumCulled = false; qScene.add(quad);
   const vs = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;

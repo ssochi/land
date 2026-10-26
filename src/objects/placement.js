@@ -4,6 +4,7 @@ import { fbm } from '../core/noise.js';
 import { DETAIL, FAR, heightAt, slopeAt, stampGrid } from '../world/grid.js';
 import { OCC, FOREST_D, FOREST_F, waterLevelAt, waterDistAt, moistureAt, sunAt, pathAt } from '../world/fields.js';
 import { KINDS, kindGeo } from './kinds.js';
+import { groundAt } from '../terrain/crag.js';
 
 export const INST = {};        // 'kind|variant|lo' -> [{ x, y, z, s, r, tilt }]
 const OBST = new Map();        // spatial hash (4m cells) -> [{ x, z, r }]: trunks and rocks that block later placements
@@ -21,6 +22,9 @@ export function obstHit(x, z, r) {
   }
   return false;
 }
+
+// calls fn(x, z, r) for every obstacle circle (used to keep grass out of trunks, rocks and masonry)
+export function forEachObstacle(fn) { for (const l of OBST.values()) for (const o of l) fn(o.x, o.z, o.r); }
 
 // move a circle of radius r at (x, z) out of every obstacle it overlaps (a few relaxation passes)
 export function obstPush(x, z, r) {
@@ -84,7 +88,7 @@ function addInstance(kind, x, z, s, rot, variant, R) {
   const v = variant != null ? variant % K.variants : Math.floor(R() * K.variants);
   const lo = K.lo && !DETAIL.inside(x, z) && Math.hypot(x, z) > K.lodDist;  // full model anywhere the camera can walk
   const key = kind + '|' + v + '|' + (lo ? 1 : 0);
-  (INST[key] || (INST[key] = [])).push({ x, z, y: heightAt(x, z) - K.sink * s, s, r: rot, tilt: K.tilt });
+  (INST[key] || (INST[key] = [])).push({ x, z, y: groundAt(x, z) - K.sink * s, s, r: rot, tilt: K.tilt });   // on the drawn (craggy) ground
   if (K.colliders) {
     // footprint circles in model space, rotated like the instance (three.js Y rotation)
     const c = Math.cos(rot), sn = Math.sin(rot);

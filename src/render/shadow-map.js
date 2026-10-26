@@ -22,6 +22,6 @@ void main() {
 #endif
   gl_Position = projectionMatrix * viewMatrix * m * vec4(position, 1.0);
 }`,
-  fragmentShader: `uniform sampler2D uLeaf; varying vec2 vUV; varying float vCard; void main() { if (vCard > 0.5 && texture2D(uLeaf, vUV).a < 0.42) discard; gl_FragColor = vec4(1.0); }`,
+  fragmentShader: `uniform sampler2D uLeaf; varying vec2 vUV; varying float vCard; void main() { if (vCard > 0.5 && vCard < 1.5 && texture2D(uLeaf, vUV).a < 0.42) discard; gl_FragColor = vec4(1.0); }`,
   side: THREE.DoubleSide
 });

@@ -5,6 +5,7 @@ import { clamp } from '../core/math.js';
 import { heightAt } from '../world/grid.js';
 import { waterLevelAt } from '../world/fields.js';
 import { obstPush } from '../objects/placement.js';
+import { groundAt } from '../terrain/crag.js';
 
 export const WALK = {
   walk: 4.6, sprint: 8.8, swim: 2.6, swimSprint: 4.2, fly: 14, flySprint: 42,  // m/s
@@ -17,7 +18,7 @@ export const WALK = {
 
 // what the feet stand on at (x, z): the ground, or a floating height in deep water
 function support(x, z) {
-  const g = heightAt(x, z), wl = waterLevelAt(x, z);
+  const g = groundAt(x, z), wl = waterLevelAt(x, z);
   return wl != null && wl - g > WALK.float ? { y: wl - WALK.float, swim: true } : { y: g, swim: false };
 }
 

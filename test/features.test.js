@@ -52,3 +52,38 @@ test('a river flowing into a lake meets the lake surface instead of floating abo
   assert.ok(rv.surf[rv.end - 1] <= lake.level, `surface ${rv.surf[rv.end - 1]} vs lake ${lake.level}`);
   for (let i = 1; i < rv.end; i++) assert.ok(rv.surf[i] <= rv.surf[i - 1] + 1e-4, 'surface never rises downstream');
 });
+
+test('grass field: dense in the open, empty in water, on paths and under rocks', async () => {
+  const { distributeGrass } = await import('../src/objects/grass.js');
+  const { DETAIL } = await import('../src/world/grid.js');
+  await generate(m => {
+    m.terrain.hill(30, 0, { radius: 14, height: -4, shape: 'smooth' });
+    m.water.lake(30, 0, { fill: 2 });
+    m.path([[-40, -20], [-40, 20]], { width: 3 });
+    m.place('rock.boulder', 0, 20, { scale: 2 });
+    m.grass({ center: [0, 0], radius: 60 });
+  });
+  const { field, total } = distributeGrass(0.6), n = DETAIL.n;
+  const at = (x, z) => { const i = Math.round((x - DETAIL.min) / DETAIL.step), j = Math.round((z - DETAIL.min) / DETAIL.step); return field[(j * n + i) * 4 + 1]; };
+  assert.ok(total > 50000, `expected blade count ${total}`);
+  assert.ok(at(0, 0) > 0.4, `open meadow density ${at(0, 0)}`);
+  assert.equal(at(30, 0), 0, 'no grass in the lake');
+  assert.equal(at(-40, 0), 0, 'no grass on the path');
+  assert.equal(at(0, 20), 0, 'no grass under the boulder');
+  assert.equal(at(0, 75), 0, 'no grass outside the patch');
+});
+
+test('objects on cliffs sit on the drawn (crag-displaced) rock, not the smooth height field', async () => {
+  const { groundAt } = await import('../src/terrain/crag.js');
+  const { INST } = await import('../src/objects/placement.js');
+  let cliff = null;
+  await generate(m => {
+    m.terrain.plateau(0, 0, { radius: 30, height: 25, cliff: 4, ledges: 0, warp: 0 });
+    m.place('rock.boulder', 31.5, 3, { scale: 1 });
+    cliff = [m.heightAt(31.5, 3)];
+  });
+  const g = groundAt(31.5, 3), o = Object.values(INST).flat()[0];
+  assert.ok(Math.abs(g - cliff[0]) > 0.05, `crag moves the cliff surface (${g} vs ${cliff[0]})`);
+  assert.ok(Math.abs(o.y + 0.25 - g) < 1e-6, `boulder rests on the drawn surface (${o.y})`);
+  assert.equal(groundAt(0, 0), 25, 'flat ground is unchanged');
+});

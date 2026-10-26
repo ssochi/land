@@ -78,7 +78,7 @@ defineScene((m) => {
   m.scatter('rock.boulder', { count: 14, area: m.circle(0, -20, 130), rules: { slope: [0, 0.5], waterDist: [2, 999] }, scale: [0.8, 2.2], minSpacing: 14, seed: 6 });
   m.scatter('rock.boulder', { count: 7, area: m.circle(15, -80, 70), rules: { waterDist: [0, 2.5] }, scale: [0.6, 1.4], minSpacing: 8, seed: 7 });
   m.scatter('rock.pebble', { count: 170, area: m.circle(82, -106, 55), rules: { waterDist: [0.2, 7], noise: { scale: 0.09, threshold: 0.5, seed: 21 } }, scale: [0.35, 1.5], seed: 8 });
-  m.scatter('rock.boulder', { count: 9, area: m.circle(-44, -100, 14), rules: { waterDist: [0, 4] }, scale: [0.6, 1.6], minSpacing: 3, seed: 9 });   // 瀑布潭边
+  m.scatter('rock.boulder', { count: 9, area: m.circle(-44, -100, 14), rules: { waterDist: [0, 4], slope: [0, 0.35] }, scale: [0.6, 1.6], minSpacing: 3, seed: 9 });   // 瀑布潭边
   m.scatter('rock.cliff', { count: 10, area: m.ring(-78, -122, 28, 42), rules: { slope: [0.5, 1] }, scale: [0.7, 1.2], minSpacing: 9, seed: 32 });  // 打破台地崖壁的轮廓
   m.scatter('rock.cliff', { count: 45, area: m.ring(0, 0, 160, 700), rules: { slope: [0.2, 0.95], waterDist: [4, 999] }, scale: [0.8, 1.7], minSpacing: 22, seed: 31 });
 
@@ -92,7 +92,7 @@ defineScene((m) => {
   m.scatter('flower.lupine', { count: 1600, area: m.circle(15, -80, 80), rules: { waterDist: [1.2, 9], slope: [0, 0.45] }, seed: 14 });
 
   // ── 草 ───────────────────────────────────────────────
-  m.grass({ center: [0, -15], radius: 118 });
+  m.grass({ center: [0, -10], radius: 172 });                                   // 整个谷地：GPU 草按距离分级，铺满不增加开销
   m.grass({ center: [-55, 85], radius: 60, density: 0.8 });                     // 南边草甸，路的起点
 
   // ── 环境与镜头 ───────────────────────────────────────

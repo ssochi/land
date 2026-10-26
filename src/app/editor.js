@@ -16,7 +16,7 @@ import { terrainMat, buildTerrainMeshes } from '../render/terrain-mesh.js';
 import { buildWaterMeshes, MIST_PX } from '../render/water-mesh.js';
 import { createReflection } from '../render/reflection.js';
 import { buildInstances } from '../render/props.js';
-import { BLADE_HI, BLADE_LO, buildGrassMeshes } from '../render/grass.js';
+import { createGrass } from '../render/grass.js';
 import { createStreaks } from '../render/wind-streaks.js';
 import { createPollen } from '../render/pollen.js';
 import { atmosphere, applyTOD, todLabel } from '../render/time-of-day.js';
@@ -32,7 +32,7 @@ const tick = () => new Promise(r => requestAnimationFrame(() => r()));
 
 export function createEditor(renderer, canvas) {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 4000);
+  const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.2, 4000);
   const sky = createSky(scene);
   const controls = createControls(camera, canvas);
   const streaks = createStreaks(scene, camera, controls);
@@ -40,7 +40,8 @@ export function createEditor(renderer, canvas) {
   const shadows = createShadows(renderer, scene, camera, controls);
   const post = createPost(renderer, scene, camera);
   const reflection = createReflection(renderer, scene, camera);
-  MIST_PX.value = renderer.getPixelRatio();
+  const grass = createGrass(scene);
+  MIST_PX.value = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
   const pointer = createPointerPush(canvas, camera);
 
   const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls, renderer, mode: 'orbit' };
@@ -144,10 +145,10 @@ export function createEditor(renderer, canvas) {
     ed.sceneFn = fn;
     const session = newSession(), report = session.report;
     ed.report = report; ed.cameras = session.cameras;
-    resetWorld(); atmosphere.fogOverride = null;
+    resetWorld(); atmosphere.fogOverride = null; grass.setField(null);
     if (worldGroup) {
       const keep = cachedGeometries();
-      worldGroup.traverse(o => { if (o.geometry && !keep.has(o.geometry) && o.geometry !== BLADE_HI && o.geometry !== BLADE_LO) o.geometry.dispose(); });
+      worldGroup.traverse(o => { if (o.geometry && !keep.has(o.geometry)) o.geometry.dispose(); });
       scene.remove(worldGroup);
     }
     worldGroup = new THREE.Group(); scene.add(worldGroup);
@@ -160,8 +161,8 @@ export function createEditor(renderer, canvas) {
     settleWater(report);
     report.counts = buildInstances(worldGroup);
     ui.stage('种草'); await tick();
-    const grass = distributeGrass(isSmall ? 0.35 : 0.6);
-    buildGrassMeshes(worldGroup, grass.chunks); report.counts.grassBlades = grass.total;
+    const gf = distributeGrass(isSmall ? 0.35 : 0.6);
+    grass.setField(gf.field); report.counts.grassBlades = gf.total;
 
     ui.stage('生成地形网格'); await tick();
     U.uHzOn.value = 0;
@@ -197,13 +198,13 @@ export function createEditor(renderer, canvas) {
     sky.position.copy(camera.position);
     U.uFogDensity.value = atmosphere.fogBase;
     pollen.m.uniforms.uCenter.value.set(controls.target.x, heightAt(controls.target.x, controls.target.z), controls.target.z);
-    shadows.update(); reflection.update(); post.render();
+    grass.update(camera); shadows.update(); reflection.update(); post.render();
   }
 
   // advance animation time by sec in fixed 50ms steps (deterministic headless stepping)
   function step(sec) { const n = Math.max(1, Math.round((sec || 0) / 0.05)); for (let i = 0; i < n; i++) { U.uTime.value += 0.05; if (ed.mode === 'walk') updateWalker(0.05); streaks.update(0.05); } }
 
-  function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); post.resize(); reflection.resize(); }
+  function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); post.resize(); reflection.resize(); MIST_PX.value = renderer.getDrawingBufferSize(new THREE.Vector2()).y; }
 
   function start() {
     ui.initUI({ onTime: setTimeOfDay, onWind: v => { U.uWind.value = v; }, onWalk: () => (ed.mode === 'walk' ? exitWalk() : enterWalk()) });
@@ -221,6 +222,6 @@ export function createEditor(renderer, canvas) {
     requestAnimationFrame(frame);
   }
 
-  return Object.assign(ed, { build, setCamera, setView, renderFrame, step, start, worldGroup: () => worldGroup,
+  return Object.assign(ed, { build, setCamera, setView, renderFrame, step, start, worldGroup: () => worldGroup, grassStats: () => grass.stats(),
     walk: enterWalk, orbit: exitWalk, setInput, player: () => (walker ? Object.assign({ mode: ed.mode }, walkerState(walker)) : { mode: ed.mode }) });
 }

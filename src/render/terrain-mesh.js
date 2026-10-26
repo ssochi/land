@@ -1,13 +1,13 @@
 // Terrain meshes for both grids. The shader layers meadow, rock strata, alpine, forest floor, snow, sand
 // and lake bed from per-vertex fields, and implements the debug views (uDebug 1–5).
 import * as THREE from 'three';
-import { smooth } from '../core/math.js';
-import { vnoise3 } from '../core/noise.js';
 import { DETAIL, FAR, detailW } from '../world/grid.js';
+import { cragOffset } from '../terrain/crag.js';
 import { WATER, WDIST, OCC, COVER, FOREST_D, FOREST_F, FLOW_D, FLOW_F, PATH, ensureFlow } from '../world/fields.js';
 import { mat } from './material.js';
 import { PAL } from './uniforms.js';
 import { SHADOW, REFLECT } from './layers.js';
+import GRASS_TONE from './shaders/grass-tone.glsl.js';
 
 export const terrainMat = mat(`
 attribute float aWear; attribute float aShore; attribute float aDepth; attribute float aCover; attribute float aOcc; attribute float aHide; attribute float aForest; attribute float aFlowN; attribute float aPath;
@@ -21,6 +21,7 @@ void main(){
 }`, `
 uniform vec3 uRoot, uMid, uTipA, uTipB, uSand; uniform float uSnowLine;
 varying vec3 vWP; varying vec3 vN; varying float vWear; varying float vShore; varying float vDepth; varying float vCover; varying float vOcc; varying float vForest; varying float vFlowN; varying float vPath;
+${GRASS_TONE}
 // triplanar value noise and gradient: world-space detail that does not stretch down cliff faces
 float triN(vec3 p, vec3 w) { return vnoise(p.zy) * w.x + vnoise(p.xz) * w.y + vnoise(p.xy) * w.z; }
 vec3 triG(vec3 p, vec3 w) {
@@ -50,21 +51,25 @@ void main(){
   vec3 tw = pow(abs(Ng), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
   float dist = length(vWP - cameraPosition), near = 1.0 - smoothstep(250.0, 1100.0, dist);
   float wet = smoothstep(0.32, 0.8, vFlowN);
-  vec3 g1 = vnoiseD(vWP.xz * 0.09), g2 = vnoiseD(vWP.xz * 0.31 + 5.0);
-  N = normalize(N - vec3(g1.y + g2.y * 0.45, 0.0, g1.z + g2.z * 0.45) * 0.05 * near);
-  float n1 = vnoise(vWP.xz * 0.06), pn = fbm(vWP.xz * 0.035);
+  float px = length(fwidth(vWP.xz));   // metres per pixel: detail octaves fade out before they would alias
+  vec3 g1 = vnoiseD(vWP.xz * 0.09), g2 = vnoiseD(vWP.xz * 0.31 + 5.0), g3 = vnoiseD(vWP.xz * 0.8 + 3.7);
+  float tuftK = 1.0 - smoothstep(0.2, 0.8, px);
+  N = normalize(N - vec3(g1.y + g2.y * 0.45, 0.0, g1.z + g2.z * 0.45) * 0.05 * near - vec3(g3.y, 0.0, g3.z) * 0.07 * tuftK * (1.0 - slope));
+  float n1 = vnoise(vWP.xz * 0.06);
   float alt = vWP.y;
-  vec3 meadow = mix(mix(uMid, uTipB, 0.6), mix(uMid, uTipA, 0.62), smoothstep(0.35, 0.7, pn));
-  meadow *= 0.9 + 0.2 * vnoise(vWP.xz * vec2(0.35, 1.4));
-  meadow = mix(meadow, vec3(0.6, 0.62, 0.34), smoothstep(45.0, 130.0, alt + n1 * 25.0) * 0.55);
+  // meadow = grass as seen from afar: the blades' average colour (src/render/shaders/grass-tone.glsl.js), mottled
+  // by the same tuft field the blades grow in, so blade-covered and blade-less ground are one material
+  vec3 gMid, gTip; grassTone(vWP.xz, gMid, gTip);
+  float clump = mix(0.5, grassClump(vWP.xz), tuftK);
+  float tuft = mix(0.5, vnoise(vWP.xz * 0.21 + 9.0), 1.0 - smoothstep(2.0, 6.0, px));
+  float mottle = 0.78 + 0.3 * clump + 0.14 * tuft + 0.12 * fbm(vWP.xz * 0.022 + 4.0);
+  vec3 meadow = mix(gMid, gTip, 0.36) * 0.86 * mottle;
+  meadow = mix(meadow, vec3(0.6, 0.62, 0.34), smoothstep(45.0, 130.0, alt + n1 * 25.0) * 0.45);
   meadow = mix(meadow, vec3(0.42, 0.55, 0.3), smoothstep(110.0, 170.0, alt) * 0.5);
-  meadow *= 0.86;
-  meadow = mix(meadow, vec3(0.26, 0.47, 0.27), wet * 0.45);
-  float big = fbm(vWP.xz * 0.0075 + 13.0);
-  meadow = mix(meadow, vec3(0.74, 0.7, 0.38), smoothstep(0.55, 0.72, big) * 0.45);
-  meadow = mix(meadow, vec3(0.3, 0.48, 0.3), smoothstep(0.45, 0.28, big) * 0.5);
-  // ground under grass takes the blades' own mid tone (slightly shaded) so gaps between blades do not read as dark holes
-  vec3 base = mix(meadow, mix(uMid, uTipB, 0.4) * 0.92, clamp(vCover, 0.0, 1.0) * 0.9);
+  meadow = mix(meadow, vec3(0.24, 0.44, 0.25), wet * 0.45);
+  // up close under the blades: the stems' shaded mid tone, so gaps have depth without reading as dark holes
+  vec3 sward = mix(gMid, gTip, 0.15) * 0.8 * mottle;
+  vec3 base = mix(meadow, sward, clamp(vCover, 0.0, 1.0) * (1.0 - smoothstep(5.0, 30.0, dist)) * 0.95);
   // worn track: packed earth with grit, a ragged grassy edge and a slightly lighter centre
   float worn = smoothstep(0.3, 0.7, vPath + (vnoise(vWP.xz * 0.9) - 0.5) * 0.45);
   vec3 dirt = mix(vec3(0.5, 0.42, 0.31), vec3(0.66, 0.57, 0.43), vnoise(vWP.xz * 0.35) * 0.6 + smoothstep(0.7, 1.0, vPath) * 0.4);
@@ -115,28 +120,22 @@ void main(){
     gl_FragColor = vec4(c, 1.0); return;
   }
   gl_FragColor = vec4(applyFog(c, vWP), 1.0);
-}`, { uRoot: { value: PAL.root }, uMid: { value: PAL.mid }, uTipA: { value: PAL.tipA }, uTipB: { value: PAL.tipB }, uSand: { value: PAL.sand }, uSnowLine: { value: 170 } });
+}`, { uRoot: { value: PAL.root }, uMid: { value: PAL.mid }, uTipA: { value: PAL.tipA }, uTipB: { value: PAL.tipB }, uSand: { value: PAL.sand }, uSnowLine: { value: 170 } },
+  { extensions: { derivatives: true } });
 
 // the FAR mesh shares uniforms but is pushed back in depth so DETAIL wins where they overlap
 const farTerrainMat = terrainMat.clone();
 farTerrainMat.uniforms = terrainMat.uniforms;
 farTerrainMat.polygonOffset = true; farTerrainMat.polygonOffsetFactor = 2; farTerrainMat.polygonOffsetUnits = 2;
 
-// Steep vertices are pushed in and out along their downhill direction by 3D noise, so cliffs read as craggy
-// rock instead of a smooth stretched sheet. Faded out near the DETAIL border so the two meshes still meet.
+// cliff relief (src/terrain/crag.js) applied to the mesh vertices
 function crag(G, pos, heights) {
-  const n = G.n, st = G.step, amp = G === DETAIL ? 1.8 : 3.4, f = G === DETAIL ? 0.1 : 0.05;
+  const n = G.n, st = G.step;
   for (let j = 1; j < n - 1; j++) for (let i = 1; i < n - 1; i++) {
-    const k = j * n + i, dx = (heights[k + 1] - heights[k - 1]) / (2 * st), dz = (heights[k + n] - heights[k - n]) / (2 * st);
-    const g = Math.hypot(dx, dz), steep = smooth(0.7, 1.6, g);
-    if (steep <= 0) continue;
-    const x = pos[k * 3], y = pos[k * 3 + 1], z = pos[k * 3 + 2];
-    const din = Math.min(x - DETAIL.min, DETAIL.min + DETAIL.size - x, z - DETAIL.min, DETAIL.min + DETAIL.size - z);
-    const a = amp * steep * smooth(6, 24, Math.abs(din));
-    if (a <= 0) continue;
-    const o = (vnoise3(x * f, y * f, z * f) - 0.5) * 2 * a;
-    pos[k * 3] -= dx / g * o; pos[k * 3 + 2] -= dz / g * o;
-    pos[k * 3 + 1] += (vnoise3(x * f + 7.1, y * f, z * f - 3.3) - 0.5) * a * 0.6;
+    const k = j * n + i, dx = (heights[k + 1] - heights[k - 1]) / (2 * st), dz = (heights[k + n] - heights[k - n]) / (2 * st), g = Math.hypot(dx, dz);
+    const c = cragOffset(G, pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2], g);
+    if (!c) continue;
+    pos[k * 3] -= dx / g * c.o; pos[k * 3 + 2] -= dz / g * c.o; pos[k * 3 + 1] += c.dy;
   }
 }
 
