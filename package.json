@@ -2,11 +2,24 @@
   "name": "land",
   "private": true,
   "description": "面向 agent 的 three.js 场景引擎：用 scene.js 代码生成地形、水体、植被并渲染风格化原野",
+  "type": "module",
   "scripts": {
-    "bundle": "python3 tools/agent_render.py engine.html scene.js --bundle index.html",
-    "render": "python3 tools/agent_render.py engine.html scene.js out"
+    "dev": "esbuild --servedir=. --serve=8000",
+    "build": "node tools/build.mjs",
+    "render": "node tools/render.mjs",
+    "test": "node --test 'test/*.test.js'",
+    "lint": "eslint .",
+    "check": "npm run lint && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "esbuild": "0.28.2",
+    "eslint": "10.12.0",
+    "globals": "17.13.0",
+    "playwright": "1.63.0",
     "three": "0.147.0"
   }
 }
