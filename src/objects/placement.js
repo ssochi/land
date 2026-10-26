@@ -51,6 +51,7 @@ export function ruleCheck(x, z, rules, stats) {
   if (rules.waterDist) { const d = waterDistAt(x, z); if (d < rules.waterDist[0] || d > rules.waterDist[1]) { stats.waterDist++; return false; } }
   if (rules.moisture) { const v = moistureAt(x, z); if (v < rules.moisture[0] || v > rules.moisture[1]) { stats.moisture++; return false; } }
   if (rules.sun) { const v = sunAt(x, z); if (v < rules.sun[0] || v > rules.sun[1]) { stats.sun++; return false; } }
+  if (rules.canopy) { const v = DETAIL.inside(x, z) ? DETAIL.sample(x, z, OCC) / 0.8 : 0; if (v < rules.canopy[0] || v > rules.canopy[1]) { stats.canopy++; return false; } }
   if (rules.noise) { const nz = rules.noise; let v = fbm(x * (nz.scale || 0.05), z * (nz.scale || 0.05), 3, nz.seed || 0); if (nz.invert) v = 1 - v; if (v < (nz.threshold != null ? nz.threshold : 0.5)) { stats.noise++; return false; } }
   return true;
 }

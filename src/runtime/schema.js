@@ -42,7 +42,7 @@ export const SCHEMA = {
     margin: [NUM, 0.4, 'spill 时低于溢出点的余量'], maxRadius: [NUM, 80, '泛洪最大半径'] } },
   scatter:   { phase: 'objects', desc: '按区域 + 规则散布模型。被规则拒绝的数量会写进报告。', params: {
     kind: [STR, undefined, '见模型库'], count: [NUM, 100, '目标数量'], area: [OBJ, { type: 'all' }, '{type:circle,center,radius} | {type:ring,center,inner,outer} | {type:rect,min,max} | {type:polygon,points} | {type:all}'],
-    rules: [OBJ, {}, '{height, slope, waterDist, moisture, sun: [a,b]；noise:{scale,threshold,seed,invert}}。moisture 为汇流 + 近水湿度 0–1，sun 为坡向日照 0–1（0.5 是平地）'],
+    rules: [OBJ, {}, '{height, slope, waterDist, moisture, sun, canopy: [a,b]；noise:{scale,threshold,seed,invert}}。moisture 为汇流 + 近水湿度 0–1，sun 为坡向日照 0–1（0.5 是平地），canopy 为已放树木投下的树荫 0–1。路面上不会放置'],
     cluster: [OBJ, null, '{size, radius}：成簇分布（Thomas 过程），size 为每簇平均数量'],
     scale: [RANGE, [0.85, 1.2], '缩放区间'], minSpacing: [NUM, null, '最小间距，默认取模型半径'], seed: [NUM, 0, ''] } },
   place:     { phase: 'objects', desc: '在指定点放一个模型（贴地）。', params: {
