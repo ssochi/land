@@ -15,7 +15,7 @@ defineScene((m) => {
   t.peak(150, -150, { radius: 85, height: 42, sharpness: 1.3, seed: 6 });      // 东北小山，溪流源头
   t.raise(-80, -40, 55, 9);                                                    // 湖西高地
   t.flatten(0, 15, { radius: 55, height: 4, falloff: 40, strength: 0.65 });    // 谷底草甸
-  t.lower(15, -80, 62, 15);                                                    // 湖盆
+  t.hill(15, -80, { radius: 62, height: -15, shape: 'smooth', warp: 16, seed: 3 });  // 湖盆，轮廓扭曲成不规则形状
   t.erode({ grid: 'far', droplets: 110000, seed: 9 });
   t.thermal({ grid: 'far', iterations: 6, talus: 50 });                       // 只削去最陡的尖，留下碎石坡
   t.erode({ grid: 'detail', droplets: 25000, strength: 0.5, seed: 10 });
@@ -53,7 +53,7 @@ defineScene((m) => {
   // ── 石头 ─────────────────────────────────────────────
   m.scatter('rock.boulder', { count: 14, area: m.circle(0, -20, 130), rules: { slope: [0, 0.5], waterDist: [2, 999] }, scale: [0.8, 2.2], minSpacing: 14, seed: 6 });
   m.scatter('rock.boulder', { count: 7, area: m.circle(15, -80, 70), rules: { waterDist: [0, 2.5] }, scale: [0.6, 1.4], minSpacing: 8, seed: 7 });
-  m.scatter('rock.pebble', { count: 170, area: m.circle(82, -106, 55), rules: { waterDist: [0, 2.4], noise: { scale: 0.12, threshold: 0.45, seed: 21 } }, scale: [0.5, 2.0], seed: 8 });
+  m.scatter('rock.pebble', { count: 170, area: m.circle(82, -106, 55), rules: { waterDist: [0.2, 7], noise: { scale: 0.09, threshold: 0.5, seed: 21 } }, scale: [0.35, 1.5], seed: 8 });
 
   m.scatter('rock.cliff', { count: 45, area: m.ring(0, 0, 160, 700), rules: { slope: [0.2, 0.95], waterDist: [4, 999] }, scale: [0.8, 1.7], minSpacing: 22, seed: 31 });
 

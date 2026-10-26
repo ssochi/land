@@ -17,10 +17,10 @@ export const SCHEMA = {
     sharpness: [NUM, 1.5, '>1 更尖'], ridges: [NUM, 0.45, '棱线起伏 0–1'], seed: [NUM, 0, ''] } },
   hill:      { phase: 'terrain', desc: '加一个包或挖一个坑（height 为负）。', params: {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], radius: [NUM, undefined, ''], height: [NUM, undefined, '可为负'],
-    shape: [STR, 'gauss', 'gauss | smooth | plateau'] } },
+    shape: [STR, 'gauss', 'gauss | smooth | plateau'], warp: [NUM, 0, '轮廓扭曲，米：让边缘不再是正圆'], seed: [NUM, 0, ''] } },
   flatten:   { phase: 'terrain', desc: '把区域向目标高度压平。', params: {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], radius: [NUM, undefined, '核心半径'], height: [NUM, undefined, '目标高度'],
-    falloff: [NUM, 20, '过渡宽度'], strength: [NUM, 1, '0–1'] } },
+    falloff: [NUM, 20, '过渡宽度'], strength: [NUM, 1, '0–1'], warp: [NUM, 0, '轮廓扭曲，米'], seed: [NUM, 0, ''] } },
   river:     { phase: 'terrain', desc: '沿路径挖单调下降的河床，并生成流动水面。路径从上游写到下游。', params: {
     path: [PATH, undefined, '[[x,z],…] 至少 2 点'], width: [NUM, 6, '河道宽'], depth: [NUM, 1.4, '河床深'],
     bank: [NUM, 6, '河岸坡宽'], drop: [NUM, 0.01, '每米最小落差'] } },
@@ -59,8 +59,8 @@ export const SIGS = {
   noise: 't.noise({ amp, scale, type, octaves, seed, warp, mask })',
   mountains: 't.mountains({ inner, outer, height, base, scale, warp, seed, style, ridges })',
   peak: 't.peak(x, z, { radius, height, sharpness, ridges, seed })',
-  hill: 't.hill(x, z, { radius, height, shape })   简写：t.raise(x, z, r, h) · t.lower(x, z, r, depth)',
-  flatten: 't.flatten(x, z, { radius, height, falloff, strength })',
+  hill: 't.hill(x, z, { radius, height, shape, warp })   简写：t.raise(x, z, r, h) · t.lower(x, z, r, depth)',
+  flatten: 't.flatten(x, z, { radius, height, falloff, strength, warp })',
   smooth: 't.smooth(x, z, { radius, iterations, strength })',
   erode: 't.erode({ grid, droplets, strength, inertia, capacity, seed })',
   apply: 't.apply((x, z, h) => 新高度, { grid })',

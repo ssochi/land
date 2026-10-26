@@ -4,6 +4,7 @@ import { ensureWater, waterInfo } from '../water/water.js';
 import { listInstances } from '../objects/placement.js';
 import { KIND_DOCS } from '../objects/kinds.js';
 import { SCHEMA, SIGS } from '../runtime/schema.js';
+import { U } from '../render/uniforms.js';
 
 export function installAgentAPI(ed, canvas) {
   window.mapEditor = {
@@ -20,6 +21,8 @@ export function installAgentAPI(ed, canvas) {
     instances: (kind, limit) => listInstances(kind, limit),
     pause: (on) => { ed.paused = on !== false; return ed.paused; },
     step: (sec) => ed.step(sec),
-    snapshot: () => { ed.renderFrame(); return canvas.toDataURL('image/png'); }
+    snapshot: () => { ed.renderFrame(); return canvas.toDataURL('image/png'); },
+    // escape hatch for debugging: the live three.js objects and shared uniforms
+    debug: { scene: ed.scene, camera: ed.camera, controls: ed.controls, uniforms: U, world: () => ed.worldGroup() }
   };
 }

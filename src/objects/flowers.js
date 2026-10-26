@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { clamp, mulberry32 } from '../core/math.js';
 import { MB, V3, addTube, addBlob, addPetal } from './mesh-builder.js';
 
-const STEM = new THREE.Color('#4f8a2e');
+const STEM = new THREE.Color('#6f9c3c');  // light enough that thin stems do not read as black lines in the grass
 
 function stemPath(R, H, segs) { const bx = (R() - 0.5) * 0.12, bz = (R() - 0.5) * 0.12, out = []; for (let k = 0; k <= segs; k++) { const t = k / segs; out.push(V3(bx * t * t, t * H, bz * t * t)); } return out; }
 function flowerSway(H) { return P => Math.pow(clamp(P.y / H, 0, 1), 1.8) * 0.14; }

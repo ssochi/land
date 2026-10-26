@@ -71,7 +71,8 @@ export function buildWaterMeshes(group) {
   }
   // rivers: ribbon along the path
   for (const r of WATERS.rivers) {
-    const { pts, surf, p } = r, N = pts.length, half = p.width * 0.5 + p.bank, A = 9;
+    const { pts, surf, p } = r, N = Math.min(pts.length, r.end), half = p.width * 0.5 + p.bank, A = 9;
+    if (N < 2) continue;
     const pos = [], gr = [], fl = [], idx = [];
     for (let i = 0; i < N; i++) {
       const a = pts[Math.max(0, i - 1)], b = pts[Math.min(N - 1, i + 1)];

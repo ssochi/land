@@ -35,7 +35,7 @@ void main(){
   vec3 p = side * position.x * w; p.y = t * h; p.xz += dir * tt * h; p.y -= h * tt * min(amt * amt * 0.34, 0.62);
   vec3 world = iOffset + p;
   if (dot(face, cameraPosition - world) < 0.0) face = -face;
-  vN = normalize(mix(face, iNormal, 0.72)); vT = t; vRand = rnd; vGust = gust * uWind; vWP = world; vOcc = iOcc;
+  vN = normalize(mix(face, iNormal, 0.92)); vT = t; vRand = rnd; vGust = gust * uWind; vWP = world; vOcc = iOcc;
   gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
 }`, `
 uniform vec3 uRoot, uMid, uTipA, uTipB;
@@ -47,13 +47,15 @@ void main(){
   tip = mix(tip, vec3(0.88, 0.82, 0.44), smoothstep(0.55, 0.72, big) * 0.5);
   vec3 midc = mix(uMid * (0.86 + 0.28 * pn2), vec3(0.30, 0.52, 0.32), smoothstep(0.45, 0.28, big) * 0.55);
   tip = mix(tip, vec3(0.55, 0.74, 0.42), smoothstep(0.45, 0.28, big) * 0.45);
-  vec3 col = mix(uRoot, midc, smoothstep(0.0, 0.55, vT));
-  col = mix(col, tip, smoothstep(0.42, 1.0, vT)) * (0.9 + vRand * 0.2);
+  // gentle base-to-tip gradient: overlapping blades must not form light/dark stripes
+  vec3 body = mix(midc, tip, 0.3);
+  vec3 col = mix(mix(uRoot, body, 0.75), body, smoothstep(0.0, 0.35, vT));
+  col = mix(col, mix(body, tip, 0.75), smoothstep(0.62, 1.0, vT)) * (0.96 + vRand * 0.08);
   float cs = cloudShadow(vWP.xz);
-  vec3 lit = lighting(col, normalize(vN), vWP, 0.2) * mix(0.64, 1.0, smoothstep(0.0, 0.62, vT));
+  vec3 lit = lighting(col, normalize(vN), vWP, 0.2) * mix(0.86, 1.0, smoothstep(0.0, 0.5, vT));
   lit *= 1.0 - vOcc * 0.3;
   vec3 V = normalize(vWP - cameraPosition);
-  lit += uSunColor * tip * pow(max(dot(V, uSunDir), 0.0), 3.0) * vT * 0.6 * gShadow;
+  lit += uSunColor * tip * pow(max(dot(V, uSunDir), 0.0), 3.0) * vT * 0.45 * gShadow;
   lit += vec3(0.21, 0.23, 0.12) * vGust * smoothstep(0.45, 1.0, vT) * gShadow;
   gl_FragColor = vec4(applyFog(lit, vWP), 1.0);
 }`, { uRoot: { value: PAL.root }, uMid: { value: PAL.mid }, uTipA: { value: PAL.tipA }, uTipB: { value: PAL.tipB }, uPush: { value: PUSH } }, { side: THREE.DoubleSide });

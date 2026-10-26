@@ -29,7 +29,8 @@ export function distributeGrass(densityScale) {
       const rc = rc0 / edge;
       if (!DETAIL.inside(cx, cz) || detailW(cx, cz) < 1) continue;
       const patch = vnoise(cx * 0.07 + 11, cz * 0.07 - 4);
-      const d = densityScale * p.density * (34 + (7 - 34) * smooth(4, rad, rc)) * (0.72 + 0.56 * patch) * smooth(rad, rad * 0.88, rc);
+      const edgeW = smooth(rad, rad * 0.7, rc);
+      const d = densityScale * p.density * (46 + (12 - 46) * smooth(4, rad, rc)) * (0.72 + 0.56 * patch) * edgeW;
       // coverage for terrain shading
       const ci = Math.round((cx + 0.5 - DETAIL.min) / st), cj = Math.round((cz + 0.5 - DETAIL.min) / st);
       const covv = clamp(d / (14 * densityScale), 0, 1);
@@ -44,7 +45,7 @@ export function distributeGrass(densityScale) {
         const y = heightAt(x, z) - 0.03, nn = normalAt(x, z), r = Math.hypot(x, z);
         const tall = vnoise(x * 0.09 - 3, z * 0.09 + 8);
         B.off.push(x, y, z);
-        B.data.push(R() * 6.283, (0.32 + tall * 0.42 + R() * 0.2) * (1 + r * 0.003), 0.036 * (1 + rc * 0.034) * (0.8 + R() * 0.4), R());  // angle, height, width, random
+        B.data.push(R() * 6.283, (0.32 + tall * 0.42 + R() * 0.2) * (1 + r * 0.003) * (0.45 + 0.55 * edgeW), 0.027 * (1 + rc * 0.03) * (0.8 + R() * 0.4), R());  // angle, height, width, random
         B.nor.push(nn.x, nn.y, nn.z);
         B.occ.push(DETAIL.sample(x, z, OCC));
         if (y < B.minY) B.minY = y; if (y > B.maxY) B.maxY = y;

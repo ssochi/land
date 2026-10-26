@@ -61,7 +61,8 @@ export function buildInstances(group) {
       _m4.compose(_pp.set(o.x, o.y, o.z), _q, _s.set(o.s, o.s, o.s));
       mesh.setMatrixAt(i, _m4);
     });
-    mesh.frustumCulled = false; mesh.layers.enable(1);
+    mesh.frustumCulled = false;
+    if (!K.small) mesh.layers.enable(1);  // layer 1 = shadow casters; thin flower stems would only shadow themselves
     group.add(mesh);
     counts[kind] = (counts[kind] || 0) + list.length;
   }

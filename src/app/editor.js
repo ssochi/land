@@ -144,5 +144,5 @@ export function createEditor(renderer, canvas) {
     requestAnimationFrame(frame);
   }
 
-  return Object.assign(ed, { build, setCamera, setView, renderFrame, step, start });
+  return Object.assign(ed, { build, setCamera, setView, renderFrame, step, start, worldGroup: () => worldGroup });
 }

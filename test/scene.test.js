@@ -9,14 +9,14 @@ test('example scene builds cleanly and reproduces the reference world', async ()
   assert.deepEqual(report.errors, []);
   assert.deepEqual(report.warnings, []);
   assert.equal(name, '镜湖原野');
-  assert.equal(report.ops.length, 48);
+  assert.equal(report.ops.length, 49);
   assert.equal(report.ops[0].line, 7, 'ops carry their scene.js line');
   assert.deepEqual(cameras.map(c => c.name), ['hero', 'field', 'lake', 'river', 'flowers', 'overview', 'topdown']);
-  assert.deepEqual(report.water, [{ type: 'lake', level: -3.77 }, { type: 'river', length: 93, from: 18.1, to: -11.4 }]);
-  assert.deepEqual(report.terrain, { detail: { min: -16.3, max: 45.8, extent: '±160m @0.8m' }, far: { min: -17.7, max: 452.2, extent: '±1100m @3.7m' } });
+  assert.deepEqual(report.water, [{ type: 'lake', level: -3.75 }, { type: 'river', length: 93, from: 18.1, to: -11.7 }]);
+  assert.deepEqual(report.terrain, { detail: { min: -16.2, max: 45.8, extent: '±160m @0.8m' }, far: { min: -17.7, max: 452.2, extent: '±1100m @3.7m' } });
   assert.deepEqual(report.counts, {
-    'tree.oak': 23, 'tree.big': 1, 'tree.birch': 16, 'tree.pine': 9150, bush: 70, 'rock.boulder': 24, 'rock.pebble': 163, 'rock.cliff': 45,
-    'flower.daisy': 6500, 'flower.buttercup': 4200, 'flower.poppy': 800, 'flower.lupine': 1600, grassBlades: 304856
+    'tree.oak': 23, 'tree.big': 1, 'tree.birch': 17, 'tree.pine': 9150, bush: 70, 'rock.boulder': 24, 'rock.pebble': 170, 'rock.cliff': 45,
+    'flower.daisy': 6500, 'flower.buttercup': 4200, 'flower.poppy': 800, 'flower.lupine': 1600, grassBlades: 398799
   });
 });
 

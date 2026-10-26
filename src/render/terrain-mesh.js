@@ -35,7 +35,8 @@ void main(){
   float big = fbm(vWP.xz * 0.0075 + 13.0);
   meadow = mix(meadow, vec3(0.74, 0.7, 0.38), smoothstep(0.55, 0.72, big) * 0.45);
   meadow = mix(meadow, vec3(0.3, 0.48, 0.3), smoothstep(0.45, 0.28, big) * 0.5);
-  vec3 base = mix(meadow, mix(uRoot, uMid, 0.8), clamp(vCover, 0.0, 1.0) * 0.75);
+  // ground under grass takes the blades' own mid tone (slightly shaded) so gaps between blades do not read as dark holes
+  vec3 base = mix(meadow, mix(uMid, uTipB, 0.4) * 0.92, clamp(vCover, 0.0, 1.0) * 0.9);
   float wear = clamp(vWear, -2.0, 3.0);
   float strata = sin(alt * 0.32 + n1 * 4.0 + vnoise(vWP.xz * 0.02) * 3.0) * 0.5 + 0.5;
   vec3 rock = mix(vec3(0.38, 0.35, 0.31), vec3(0.58, 0.53, 0.46), strata * 0.6 + n1 * 0.4);

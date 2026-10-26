@@ -1,6 +1,6 @@
 // Water bodies (lakes, rivers) and the DETAIL-grid water fields derived from them.
 // Fields are rebuilt lazily: terrain edits mark them dirty, ensureWater() recomputes on the next query.
-import { clamp } from '../core/math.js';
+import { clamp, smooth } from '../core/math.js';
 import { DETAIL, heightAt } from '../world/grid.js';
 import { WATER, WDIST, waterLevelAt, waterDistAt } from '../world/fields.js';
 import { world } from '../world/state.js';
@@ -22,11 +22,37 @@ export function currentB() {
   return B;
 }
 
+// level of the lake covering (x, z), or null
+function lakeLevelAt(x, z) {
+  const n = DETAIL.n, i = Math.round((x - DETAIL.min) / DETAIL.step), j = Math.round((z - DETAIL.min) / DETAIL.step);
+  if (i < 0 || j < 0 || i >= n || j >= n) return null;
+  for (const L of WATERS.lakes) if (L.mask[j * n + i]) return L.level;
+  return null;
+}
+
+const MOUTH = 14;  // metres over which a river surface eases down to the lake it flows into
+
+// river surface = bed + 72% of depth; where the river runs into a lake the surface eases down to the lake
+// level and `r.end` marks the first point under the lake, so the ribbon stops instead of floating above it
+function riverSurface(r) {
+  const { pts, bed, len, p } = r, N = pts.length;
+  r.surf = Float32Array.from(bed, b => b + p.depth * 0.72);
+  r.end = N;
+  for (let i = 0; i < N; i++) {
+    const L = lakeLevelAt(pts[i].x, pts[i].y);
+    if (L == null || L < r.surf[i] - p.depth) continue;
+    r.end = i + 1;
+    for (let k = i; k < N; k++) r.surf[k] = Math.min(r.surf[k], L) - 0.05;
+    for (let k = i - 1; k >= 0 && len[i] - len[k] < MOUTH; k--) r.surf[k] = L + (r.surf[k] - L) * smooth(0, MOUTH, len[i] - len[k]);
+    break;
+  }
+}
+
 function markRivers(B) {
   const n = DETAIL.n;
   for (const r of WATERS.rivers) {
-    const { pts, bed, p } = r, N = pts.length, reach = p.width * 0.5 + p.bank;
-    r.surf = Float32Array.from(bed, b => b + p.depth * 0.72);
+    const { pts, p } = r, N = pts.length, reach = p.width * 0.5 + p.bank;
+    riverSurface(r);
     let minX = 1e9, minZ = 1e9, maxX = -1e9, maxZ = -1e9;
     pts.forEach(q => { minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x); minZ = Math.min(minZ, q.y); maxZ = Math.max(maxZ, q.y); });
     const st = DETAIL.step;

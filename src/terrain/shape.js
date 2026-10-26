@@ -56,9 +56,16 @@ export function peak(p) {
   });
 }
 
+// distance from (cx, cz) with the outline warped by up to `warp` metres of low-frequency noise
+function warpedDist(x, z, cx, cz, radius, warp, seed) {
+  if (!warp) return Math.hypot(x - cx, z - cz);
+  const s = 1.3 / radius;
+  return Math.hypot(x - cx + (fbm(x * s, z * s, 3, seed + 31) - 0.5) * warp * 2, z - cz + (fbm(x * s + 7.3, z * s - 2.9, 3, seed + 32) - 0.5) * warp * 2);
+}
+
 export function hill(p) {
   eachCell((x, z, h) => {
-    const d = Math.hypot(x - p.x, z - p.z) / p.radius;
+    const d = warpedDist(x, z, p.x, p.z, p.radius, p.warp, p.seed) / p.radius;
     let w;
     if (p.shape === 'smooth') w = d < 1 ? smooth(1, 0, d) : 0;
     else if (p.shape === 'plateau') w = smooth(1, 0.55, d);
@@ -69,7 +76,7 @@ export function hill(p) {
 
 export function flatten(p) {
   eachCell((x, z, h) => {
-    const d = Math.hypot(x - p.x, z - p.z);
+    const d = warpedDist(x, z, p.x, p.z, p.radius, p.warp, p.seed);
     const w = smooth(p.radius + p.falloff, p.radius, d) * p.strength;
     return h + (p.height - h) * w;
   });

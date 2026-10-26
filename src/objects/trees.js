@@ -55,12 +55,13 @@ export function makePine(seed, lo) {
   const H = 9 + R() * 5;
   const sway = P => Math.pow(Math.max(P.y, 0) / H, 2) * 0.4;
   const bark = new THREE.Color('#5d4433');
-  addTube(mb, lo ? [V3(0, -0.3, 0), V3(0, H * 0.6, 0)] : [V3(0, -0.4, 0), V3(0, H * 0.35, 0), V3(0, H * 0.7, 0), V3(0, H * 0.97, 0)], lo ? [0.34, 0.12] : [0.4, 0.27, 0.16, 0.03], lo ? 4 : 7, (t, a, P) => bark.clone().multiplyScalar(0.85 + 0.3 * vnoise(a * 2, P.y * 2)), sway);
-  const tiers = lo ? 5 : 10 + Math.floor(R() * 3), spikes = lo ? 7 : 11;
+  addTube(mb, lo ? [V3(0, -0.3, 0), V3(0, H * 0.6, 0)] : [V3(0, -0.4, 0), V3(0, H * 0.35, 0), V3(0, H * 0.7, 0), V3(0, H * 0.97, 0)], lo ? [0.42, 0.16] : [0.4, 0.27, 0.16, 0.03], lo ? 4 : 7, (t, a, P) => bark.clone().multiplyScalar(0.85 + 0.3 * vnoise(a * 2, P.y * 2)), sway);
+  const tiers = lo ? 7 : 10 + Math.floor(R() * 3), spikes = lo ? 7 : 11;
   const dkA = new THREE.Color('#24452f'), dkB = new THREE.Color('#3f6a46'), tip = new THREE.Color('#7fa35c'), under = new THREE.Color('#182f23');
   for (let t = 0; t < tiers; t++) {
     const u = t / (tiers - 1), y0 = H * (0.3 + 0.7 * u) + 0.4;
-    const Rr = Math.pow(1 - u, 0.95) * (2.3 + R() * 0.5) + 0.28, drop = 0.7 + Rr * 0.42;
+    // the LOD has few tiers, so its skirts hang lower and overlap: otherwise distant pines read as floating discs
+    const Rr = Math.pow(1 - u, 0.95) * (2.3 + R() * 0.5) + 0.28, drop = Math.max(0.7 + Rr * 0.42, lo ? Math.min(H * 0.7 / (tiers - 1) * 1.4, 0.55 + Rr * 1.2) : 0);
     const rot = R() * 6.283, topC = new THREE.Color().copy(dkA).lerp(dkB, 0.3 + 0.7 * u);
     const off = V3((R() - 0.5) * Rr * 0.12, 0, (R() - 0.5) * Rr * 0.12);
     const T = mb.v(off.x, y0, off.z, 0, 1, 0, topC, sway(V3(0, y0, 0)));
