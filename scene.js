@@ -70,7 +70,7 @@ defineScene((m) => {
   m.grass({ center: [0, -15], radius: 118 });
 
   // ── 环境与镜头 ───────────────────────────────────────
-  m.env({ time: 0.28, wind: 0.5, snowLine: 195, fogDensity: 0.0023 });
+  m.env({ time: 0.28, wind: 0.5, snowLine: 195, fogDensity: 0.0023, haze: '#86b3a3', hazeFar: 0.5, valleyFog: { height: -4, thickness: 12, density: 0.0035 }, clouds: 0.45 });
   m.camera('hero',     { label: '湖畔高地', at: [-84, -28], eye: 3.4, look: [25, -140], lookEye: 10 });
   m.camera('field',    { label: '原野', at: [-34, 44], eye: 2.6, look: [12, -70], lookEye: 6 });
   m.camera('lake',     { label: '湖岸', at: [40, -28], eye: 2.8, look: [-30, -140], lookEye: 14 });

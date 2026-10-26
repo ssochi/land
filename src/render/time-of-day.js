@@ -9,8 +9,10 @@ const KEYS = [
   { elev: 0.21, az: 0.55, sun: [1.0, 0.56, 0.3], si: 1.18, zen: '#3d4f8e', fog: '#eea57c', sky: [0.36, 0.33, 0.46], gnd: [0.28, 0.20, 0.16], fd: 0.0032 }
 ];
 
-// fogOverride: m.env({ fogDensity }) or null; fogBase: the density the frame loop applies
-export const atmosphere = { fogOverride: null, fogBase: 0.0034 };
+// fogOverride: m.env({ fogDensity }) or null; fogBase: the density the frame loop applies;
+// haze: m.env({ haze }) colour blended into the time-of-day fog/horizon colour, or null
+export const atmosphere = { fogOverride: null, fogBase: 0.0034, haze: null };
+const HAZE_MIX = 0.6;
 
 const _ca = new THREE.Color(), _cb = new THREE.Color();
 const lerpA = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
@@ -32,6 +34,7 @@ export function applyTOD(v) {
   U.uSunDir.value.set(Math.cos(elev) * Math.sin(az), Math.sin(elev), -Math.cos(elev) * Math.cos(az)).normalize();
   const sc = lerpA(A.sun, B.sun, s), si = A.si + (B.si - A.si) * s; U.uSunColor.value.setRGB(sc[0] * si, sc[1] * si, sc[2] * si);
   U.uZenith.value.copy(_ca.set(A.zen)).lerp(_cb.set(B.zen), s); U.uFogColor.value.copy(_ca.set(A.fog)).lerp(_cb.set(B.fog), s);
+  if (atmosphere.haze) U.uFogColor.value.lerp(atmosphere.haze, HAZE_MIX * (1 - 0.6 * Math.abs(v - 0.5) * 2));  // strongest at noon, keeps dawn/dusk warmth
   const sk = lerpA(A.sky, B.sky, s), gn = lerpA(A.gnd, B.gnd, s); U.uSkyAmb.value.setRGB(...sk); U.uGroundAmb.value.setRGB(...gn);
   atmosphere.fogBase = atmosphere.fogOverride != null ? atmosphere.fogOverride : A.fd + (B.fd - A.fd) * s; U.uFogDensity.value = atmosphere.fogBase;
   updateSunHorizon();

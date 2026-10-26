@@ -14,7 +14,8 @@ export const U = {
   uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunColor: { value: new THREE.Color(1, 1, 1) },
   uSkyAmb: { value: new THREE.Color(0.42, 0.52, 0.62) }, uGroundAmb: { value: new THREE.Color(0.3, 0.34, 0.24) },
   uFogColor: { value: new THREE.Color('#bddbe8') }, uZenith: { value: new THREE.Color('#2a76d2') },
-  uFogDensity: { value: 0.0034 }, uDebug: { value: 0 }
+  uFogDensity: { value: 0.0034 }, uDebug: { value: 0 },
+  uHazeFar: { value: 0.45 }, uVFog: { value: new THREE.Vector3(0, 12, 0) }, uCloudCover: { value: 0.5 }, uGlare: { value: 1 }
 };
 
 // grass/terrain/water colors; m.env({ grass, water }) overwrites them in place

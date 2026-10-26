@@ -43,7 +43,11 @@ export const SCHEMA = {
     center: [XZ, [0, 0], ''], radius: [NUM, 80, ''], density: [NUM, 1, '密度倍率'], rules: [OBJ, {}, '同 scatter.rules'] } },
   env:       { phase: 'env', desc: '环境：时刻、风、雾、雪线、配色。', params: {
     time: [NUM, 0.3, '0 清晨 · 0.5 正午 · 1 黄昏'], wind: [NUM, 0.5, '0–1'], windDir: [XZ, [0.86, -0.48], ''],
-    fogDensity: [NUM, null, '覆盖时刻预设的雾'], snowLine: [NUM, 170, '雪线，米'], streaks: [BOOL, true, '风痕'], pollen: [BOOL, true, '飞絮'],
+    fogDensity: [NUM, null, '覆盖时刻预设的雾'], haze: [STR, null, '雾色（十六进制），与时刻预设混合：绿地偏青绿、荒地偏暖'],
+    hazeFar: [NUM, 0.45, '远景雾化 0–1：越大，远山越像只剩轮廓的平面剪影'],
+    valleyFog: [OBJ, null, '山谷雾层 {height: 雾顶高度米, thickness: 衰减厚度米, density}，低处出现成片飘动的雾'],
+    clouds: [NUM, 0.5, '云量 0–1'], glare: [NUM, 1, '太阳眩光强度'],
+    snowLine: [NUM, 170, '雪线，米'], streaks: [BOOL, true, '风痕'], pollen: [BOOL, true, '飞絮'],
     grass: [OBJ, null, '{root,mid,tipA,tipB} 十六进制'], water: [OBJ, null, '{shallow,deep}'] } },
   camera:    { phase: 'env', desc: '镜头预设。用 at/look 贴地写（eye 为离地高度），或用 pos/target 绝对坐标。第一个为默认镜头。', params: {
     name: [STR, undefined, '只用字母数字，可作 #锚点'], label: [STR, null, '显示名'], at: [XZ, null, ''], eye: [NUM, 2.5, ''],
@@ -70,7 +74,7 @@ export const SIGS = {
   scatter: 'm.scatter(kind, { count, area, rules, scale, minSpacing, cluster, seed })  → { placed, requested, rejected, positions }',
   place: 'm.place(kind, x, z, { scale, rotation, variant })  → { x, y, z }',
   grass: 'm.grass({ center, radius, density, rules })',
-  env: 'm.env({ time, wind, windDir, fogDensity, snowLine, streaks, pollen, grass, water })',
+  env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, snowLine, streaks, pollen, grass, water })',
   camera: 'm.camera(name, { label, at, eye, look, lookEye } | { label, pos, target })'
 };
 
