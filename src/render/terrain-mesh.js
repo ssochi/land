@@ -7,6 +7,7 @@ import { DETAIL, FAR, detailW } from '../world/grid.js';
 import { WATER, WDIST, OCC, COVER, FOREST_D, FOREST_F, FLOW_D, FLOW_F, ensureFlow } from '../world/fields.js';
 import { mat } from './material.js';
 import { PAL } from './uniforms.js';
+import { SHADOW, REFLECT } from './layers.js';
 
 export const terrainMat = mat(`
 attribute float aWear; attribute float aShore; attribute float aDepth; attribute float aCover; attribute float aOcc; attribute float aHide; attribute float aForest; attribute float aFlowN;
@@ -155,7 +156,7 @@ export function buildTerrainMeshes(group, B) {
   // fold FAR-grid fields into the DETAIL mesh across the seam
   for (let j = 0; j < nD; j++) for (let i = 0; i < nD; i++) { const x = DETAIL.x(i), z = DETAIL.x(j), w = detailW(x, z), k = j * nD + i; dWear[k] = DETAIL.wear[k] + FAR.sample(x, z, FAR.wear) * (1 - w); FOREST_D[k] = Math.max(FOREST_D[k], FAR.sample(x, z, FOREST_F) * (1 - w)); flowAttr[k] = FLOW_D[k] * w + FAR.sample(x, z, FLOW_F) * (1 - w); }
   const detailMesh = new THREE.Mesh(gridGeometry(DETAIL, B, { aWear: dWear, aShore: shore, aDepth: depth, aCover: COVER, aOcc: OCC, aHide: hide, aForest: FOREST_D, aFlowN: flowAttr }), terrainMat);
-  detailMesh.layers.enable(1);
+  detailMesh.layers.enable(SHADOW); detailMesh.layers.enable(REFLECT);
   group.add(detailMesh);
   // FAR vertices well inside DETAIL are sunk 8m (aHide) so they never poke through
   const nF = FAR.n, fHide = new Float32Array(nF * nF), fShore = new Float32Array(nF * nF).fill(999), fZero = new Float32Array(nF * nF);
@@ -163,5 +164,6 @@ export function buildTerrainMeshes(group, B) {
     const x = FAR.x(i), z = FAR.x(j), din = Math.min(x - DETAIL.min, DETAIL.min + DETAIL.size - x, z - DETAIL.min, DETAIL.min + DETAIL.size - z);
     fHide[j * nF + i] = din > FAR.step * 1.6 ? 1 : 0;
   }
-  group.add(new THREE.Mesh(gridGeometry(FAR, FAR.h, { aWear: FAR.wear, aShore: fShore, aDepth: fZero, aCover: fZero, aOcc: fZero, aHide: fHide, aForest: FOREST_F, aFlowN: FLOW_F }), farTerrainMat));
+  const farMesh = new THREE.Mesh(gridGeometry(FAR, FAR.h, { aWear: FAR.wear, aShore: fShore, aDepth: fZero, aCover: fZero, aOcc: fZero, aHide: fHide, aForest: FOREST_F, aFlowN: FLOW_F }), farTerrainMat);
+  farMesh.layers.enable(REFLECT); group.add(farMesh);
 }

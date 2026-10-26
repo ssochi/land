@@ -6,6 +6,7 @@ import { KINDS, kindGeo } from '../objects/kinds.js';
 import { INST } from '../objects/placement.js';
 import { mat } from './material.js';
 import { LEAF_TEX } from './textures.js';
+import { SHADOW, REFLECT } from './layers.js';
 
 const propMat = (o) => mat(`
 attribute vec3 aColor; attribute float aSway; attribute vec2 aUV; attribute float aCard;
@@ -62,7 +63,7 @@ export function buildInstances(group) {
       mesh.setMatrixAt(i, _m4);
     });
     mesh.frustumCulled = false;
-    if (!K.small) mesh.layers.enable(1);  // layer 1 = shadow casters; thin flower stems would only shadow themselves
+    if (!K.small) { mesh.layers.enable(SHADOW); mesh.layers.enable(REFLECT); }  // flowers: thin stems would only shadow themselves
     group.add(mesh);
     counts[kind] = (counts[kind] || 0) + list.length;
   }

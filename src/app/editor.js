@@ -12,7 +12,8 @@ import { U, PAL } from '../render/uniforms.js';
 import { computeHorizon } from '../render/horizon.js';
 import { createSky } from '../render/sky.js';
 import { terrainMat, buildTerrainMeshes } from '../render/terrain-mesh.js';
-import { buildWaterMeshes } from '../render/water-mesh.js';
+import { buildWaterMeshes, MIST_PX } from '../render/water-mesh.js';
+import { createReflection } from '../render/reflection.js';
 import { buildInstances } from '../render/props.js';
 import { BLADE_HI, BLADE_LO, buildGrassMeshes } from '../render/grass.js';
 import { createStreaks } from '../render/wind-streaks.js';
@@ -35,6 +36,8 @@ export function createEditor(renderer, canvas) {
   const pollen = createPollen(scene, renderer);
   const shadows = createShadows(renderer, scene, camera, controls);
   const post = createPost(renderer, scene, camera);
+  const reflection = createReflection(renderer, scene, camera);
+  MIST_PX.value = renderer.getPixelRatio();
   const pointer = createPointerPush(canvas, camera);
 
   const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls };
@@ -97,7 +100,7 @@ export function createEditor(renderer, canvas) {
     ui.stage('生成地形网格'); await tick();
     U.uHzOn.value = 0;
     buildTerrainMeshes(worldGroup, currentB());
-    buildWaterMeshes(worldGroup);
+    reflection.setLakes(buildWaterMeshes(worldGroup));
     ui.stage('计算地形光照'); await tick();
     const th = performance.now(); computeHorizon(); U.uHzOn.value = 1; report.timing.horizon = Math.round(performance.now() - th);
 
@@ -126,13 +129,13 @@ export function createEditor(renderer, canvas) {
     sky.position.copy(camera.position);
     U.uFogDensity.value = atmosphere.fogBase;
     pollen.m.uniforms.uCenter.value.set(controls.target.x, heightAt(controls.target.x, controls.target.z), controls.target.z);
-    shadows.update(); post.render();
+    shadows.update(); reflection.update(); post.render();
   }
 
   // advance animation time by sec in fixed 50ms steps (deterministic headless stepping)
   function step(sec) { const n = Math.max(1, Math.round((sec || 0) / 0.05)); for (let i = 0; i < n; i++) { U.uTime.value += 0.05; streaks.update(0.05); } }
 
-  function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); post.resize(); }
+  function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); post.resize(); reflection.resize(); }
 
   function start() {
     ui.initUI({ onTime: setTimeOfDay, onWind: v => { U.uWind.value = v; } });

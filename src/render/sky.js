@@ -2,6 +2,7 @@
 // Writes alpha 0 so the post pass can tell sky from geometry (god rays).
 import * as THREE from 'three';
 import { mat } from './material.js';
+import { REFLECT } from './layers.js';
 
 const skyMat = mat(`varying vec3 vDir; void main(){ vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`, `
 varying vec3 vDir;
@@ -31,6 +32,6 @@ void main(){
 
 export function createSky(scene) {
   const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 48, 24), skyMat);
-  sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
+  sky.renderOrder = -10; sky.frustumCulled = false; sky.layers.enable(REFLECT); scene.add(sky);
   return sky;
 }
