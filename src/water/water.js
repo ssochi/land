@@ -4,7 +4,7 @@ import { clamp, smooth } from '../core/math.js';
 import { DETAIL, heightAt } from '../world/grid.js';
 import { WATER, WDIST, waterLevelAt, waterDistAt } from '../world/fields.js';
 import { world } from '../world/state.js';
-import { nearestOnPath } from './path.js';
+import { nearestOnPath } from '../world/polyline.js';
 
 export const WATERS = { lakes: [], rivers: [] };
 

@@ -30,6 +30,8 @@ export const SCHEMA = {
   river:     { phase: 'terrain', desc: '沿路径挖单调下降的河床，并生成流动水面。路径从上游写到下游。', params: {
     path: [PATH, undefined, '[[x,z],…] 至少 2 点'], width: [NUM, 6, '河道宽'], depth: [NUM, 1.4, '河床深'],
     bank: [NUM, 6, '河岸坡宽'], drop: [NUM, 0.01, '每米最小落差'] } },
+  path:      { phase: 'terrain', desc: '土路：沿路径踩出裸露的土路，横向找平地面；草、树、花都会避开路面。用来引导视线、连接地标。', params: {
+    path: [PATH, undefined, '[[x,z],…] 至少 2 点'], width: [NUM, 2.4, '路宽，米'], flatten: [NUM, 0.6, '横向找平强度 0–1'], wear: [NUM, 1, '路面裸露程度 0–1'] } },
   smooth:    { phase: 'terrain', desc: '局部平滑细节网格。', params: {
     x: [NUM, 0, ''], z: [NUM, 0, ''], radius: [NUM, 80, ''], iterations: [NUM, 2, ''], strength: [NUM, 0.5, '0–1'] } },
   erode:     { phase: 'terrain', desc: '水滴式水力侵蚀，生成冲沟与沉积扇，同时写入磨损图供着色使用。', params: {
@@ -79,6 +81,7 @@ export const SIGS = {
   thermal: 't.thermal({ grid, iterations, talus, rate })',
   river: 'm.water.river(path, { width, depth, bank, drop })  → { length, drop, width, points(spacing) }',
   lake: 'm.water.lake(x, z, { level | fill, margin, maxRadius })  → { level, area, leaked } | null',
+  path: 'm.path(points, { width, flatten, wear })  → { length }',
   scatter: 'm.scatter(kind, { count, area, rules, scale, minSpacing, cluster, seed })  → { placed, requested, rejected, positions }',
   place: 'm.place(kind, x, z, { scale, rotation, variant })  → { x, y, z }',
   grass: 'm.grass({ center, radius, density, rules })',
@@ -88,7 +91,7 @@ export const SIGS = {
 
 // op name -> how the call is spelled in scene.js (report rows)
 export const CALL = { noise: 't.noise', mountains: 't.mountains', peak: 't.peak', hill: 't.hill', flatten: 't.flatten', plateau: 't.plateau', terrace: 't.terrace', smooth: 't.smooth', erode: 't.erode', apply: 't.apply', thermal: 't.thermal',
-  river: 'm.water.river', lake: 'm.water.lake', scatter: 'm.scatter', place: 'm.place', grass: 'm.grass', env: 'm.env', camera: 'm.camera' };
+  river: 'm.water.river', lake: 'm.water.lake', path: 'm.path', scatter: 'm.scatter', place: 'm.place', grass: 'm.grass', env: 'm.env', camera: 'm.camera' };
 
 // fill defaults and type-check one call. Returns { error } or { p, warn, def }.
 export function validate(op) {

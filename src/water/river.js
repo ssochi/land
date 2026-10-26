@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { clamp, smooth } from '../core/math.js';
 import { GRIDS, heightAt } from '../world/grid.js';
-import { catmull, nearestOnPath } from './path.js';
+import { catmull, nearestOnPath } from '../world/polyline.js';
 import { WATERS } from './water.js';
 
 export function carveRiver(p) {

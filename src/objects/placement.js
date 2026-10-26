@@ -2,7 +2,7 @@
 import { mulberry32 } from '../core/math.js';
 import { fbm } from '../core/noise.js';
 import { DETAIL, FAR, heightAt, slopeAt, stampGrid } from '../world/grid.js';
-import { OCC, FOREST_D, FOREST_F, waterLevelAt, waterDistAt, moistureAt, sunAt } from '../world/fields.js';
+import { OCC, FOREST_D, FOREST_F, waterLevelAt, waterDistAt, moistureAt, sunAt, pathAt } from '../world/fields.js';
 import { KINDS } from './kinds.js';
 
 export const INST = {};        // 'kind|variant|lo' -> [{ x, y, z, s, r, tilt }]
@@ -37,7 +37,7 @@ function areaSampler(area, R) {
   return () => [DETAIL.min + R() * DETAIL.size, DETAIL.min + R() * DETAIL.size];
 }
 
-export const emptyRejectStats = () => ({ area: 0, water: 0, height: 0, slope: 0, waterDist: 0, moisture: 0, sun: 0, noise: 0, spacing: 0 });
+export const emptyRejectStats = () => ({ area: 0, water: 0, path: 0, height: 0, slope: 0, waterDist: 0, moisture: 0, sun: 0, canopy: 0, noise: 0, spacing: 0 });
 
 // true if (x, z) passes every rule; otherwise increments the failing rule's counter in `stats`
 export function ruleCheck(x, z, rules, stats) {
@@ -45,6 +45,7 @@ export function ruleCheck(x, z, rules, stats) {
   const h = heightAt(x, z);
   const wl = waterLevelAt(x, z);
   if (wl != null && wl > h - 0.05) { stats.water++; return false; }
+  if (pathAt(x, z) > 0.35) { stats.path++; return false; }
   if (rules.height && (h < rules.height[0] || h > rules.height[1])) { stats.height++; return false; }
   if (rules.slope) { const s = slopeAt(x, z); if (s < rules.slope[0] || s > rules.slope[1]) { stats.slope++; return false; } }
   if (rules.waterDist) { const d = waterDistAt(x, z); if (d < rules.waterDist[0] || d > rules.waterDist[1]) { stats.waterDist++; return false; } }

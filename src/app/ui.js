@@ -41,7 +41,7 @@ export function renderReport(r, view, onView) {
 export function markView(v) { document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.view === v))); }
 
 function renderSchema() {
-  const order = ['noise', 'mountains', 'peak', 'hill', 'flatten', 'plateau', 'terrace', 'smooth', 'erode', 'thermal', 'apply', 'river', 'lake', 'scatter', 'place', 'grass', 'env', 'camera'];
+  const order = ['noise', 'mountains', 'peak', 'hill', 'flatten', 'plateau', 'terrace', 'smooth', 'erode', 'thermal', 'apply', 'river', 'lake', 'path', 'scatter', 'place', 'grass', 'env', 'camera'];
   $('paneSchema').innerHTML = `<p class="lead">场景写在 <code>scene.js</code> 里：<code>defineScene((m) =&gt; { … })</code>。每个调用都立即执行，后面的代码能马上查询结果；出错时报告会给出行号。下面列出参数，缺省取默认值，写错参数名会收到警告。</p>
 <pre class="api">defineScene((m) =&gt; {
   const t = m.terrain;

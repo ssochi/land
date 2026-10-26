@@ -9,6 +9,7 @@ import { TERRAIN, apply as applyBrush } from '../terrain/index.js';
 import { WATERS, currentB, ensureWater, waterInfo } from '../water/water.js';
 import { carveRiver, riverHandle } from '../water/river.js';
 import { fillLake } from '../water/lake.js';
+import { carvePath } from '../terrain/path.js';
 import { KINDS } from '../objects/kinds.js';
 import { opScatter, opPlace } from '../objects/placement.js';
 import { GRASS_OPS } from '../objects/grass.js';
@@ -85,6 +86,12 @@ export function makeAPI(session) {
   const rand = (seed = 1) => { const f = mulberry32(seed * 7919 + 17); f.range = (a, b) => a + f() * (b - a); f.pick = arr => arr[Math.floor(f() * arr.length)]; f.chance = q => f() < q; return f; };
   return {
     terrain: t, water,
+    path: (points, o = {}) => call('path', Object.assign({ path: points }, o), (p, r) => {
+      late(r);
+      const out = carvePath(p); terrainChanged();
+      add(r, `长 ${out.length}m · 宽 ${p.width}m`);
+      return out;
+    }),
     scatter: (kind, o = {}) => call('scatter', Object.assign({ kind }, o), (p, r) => { ensureWater(); world.objectsTouched = true; return opScatter(p, r); }),
     place: (kind, x, z, o = {}) => call('place', Object.assign({ kind, x, z }, o), (p, r) => { ensureWater(); world.objectsTouched = true; return opPlace(p, r); }),
     grass: (o = {}) => call('grass', o, (p, r) => { GRASS_OPS.push({ p, rep: r }); r.note = '脚本结束后统一生成'; }),

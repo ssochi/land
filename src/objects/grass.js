@@ -3,7 +3,7 @@
 import { clamp, smooth, mulberry32 } from '../core/math.js';
 import { fbm, vnoise } from '../core/noise.js';
 import { DETAIL, detailW, heightAt, normalAt } from '../world/grid.js';
-import { COVER, OCC } from '../world/fields.js';
+import { COVER, OCC, PATH } from '../world/fields.js';
 import { ruleCheck, obstHit, emptyRejectStats, topRejects } from './placement.js';
 
 export const GRASS_OPS = [];   // [{ p, rep }] queued by m.grass()
@@ -29,7 +29,9 @@ export function distributeGrass(densityScale) {
       const rc = rc0 / edge;
       if (!DETAIL.inside(cx, cz) || detailW(cx, cz) < 1) continue;
       const patch = vnoise(cx * 0.07 + 11, cz * 0.07 - 4);
-      const edgeW = smooth(rad, rad * 0.7, rc);
+      const ci0 = Math.round((cx + 0.5 - DETAIL.min) / st), cj0 = Math.round((cz + 0.5 - DETAIL.min) / st);
+      const worn = ci0 >= 0 && cj0 >= 0 && ci0 < n && cj0 < n ? PATH[cj0 * n + ci0] : 0;
+      const edgeW = smooth(rad, rad * 0.7, rc) * (1 - smooth(0.1, 0.55, worn));
       const d = densityScale * p.density * (46 + (12 - 46) * smooth(4, rad, rc)) * (0.72 + 0.56 * patch) * edgeW;
       // coverage for terrain shading
       const ci = Math.round((cx + 0.5 - DETAIL.min) / st), cj = Math.round((cz + 0.5 - DETAIL.min) / st);
