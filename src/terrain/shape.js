@@ -82,6 +82,28 @@ export function flatten(p) {
   });
 }
 
+// raised table-land with near-vertical walls; `ledges` steps the wall so it reads as layered rock, the top keeps
+// whatever relief was underneath
+export function plateau(p) {
+  eachCell((x, z, h) => {
+    const d = warpedDist(x, z, p.x, p.z, p.radius, p.warp, p.seed);
+    let u = smooth(p.radius + p.cliff, p.radius, d);
+    if (u <= 0) return h;
+    if (p.ledges > 0) { const q = u * (p.ledges + 1), f = Math.floor(q); u = Math.min(1, (f + smooth(0.35, 1, q - f)) / (p.ledges + 1)); }
+    return h + p.height * u;
+  });
+}
+
+// quantise heights into terraces inside a radius: flat treads, steep risers (`sharpness` = riser share of a step)
+export function terrace(p) {
+  eachCell((x, z, h) => {
+    const w = smooth(p.radius + p.falloff, p.radius, Math.hypot(x - p.x, z - p.z));
+    if (w <= 0) return h;
+    const q = h / p.step, f = Math.floor(q);
+    return h + ((f + smooth(1 - p.sharpness, 1, q - f)) * p.step - h) * w;
+  });
+}
+
 // local 5-tap blur on the DETAIL grid only
 export function smoothOp(p) {
   const G = DETAIL, n = G.n, tmp = new Float32Array(G.h.length);

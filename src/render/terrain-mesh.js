@@ -1,6 +1,8 @@
 // Terrain meshes for both grids. The shader layers meadow, rock strata, alpine, forest floor, snow, sand
 // and lake bed from per-vertex fields, and implements the debug views (uDebug 1–5).
 import * as THREE from 'three';
+import { smooth } from '../core/math.js';
+import { vnoise3 } from '../core/noise.js';
 import { DETAIL, FAR, detailW } from '../world/grid.js';
 import { WATER, WDIST, OCC, COVER, FOREST_D, FOREST_F, FLOW_D, FLOW_F, ensureFlow } from '../world/fields.js';
 import { mat } from './material.js';
@@ -18,12 +20,37 @@ void main(){
 }`, `
 uniform vec3 uRoot, uMid, uTipA, uTipB, uSand; uniform float uSnowLine;
 varying vec3 vWP; varying vec3 vN; varying float vWear; varying float vShore; varying float vDepth; varying float vCover; varying float vOcc; varying float vForest; varying float vFlowN;
+// triplanar value noise and gradient: world-space detail that does not stretch down cliff faces
+float triN(vec3 p, vec3 w) { return vnoise(p.zy) * w.x + vnoise(p.xz) * w.y + vnoise(p.xy) * w.z; }
+vec3 triG(vec3 p, vec3 w) {
+  vec3 a = vnoiseD(p.zy), b = vnoiseD(p.xz), c = vnoiseD(p.xy);
+  return vec3(0.0, a.z, a.y) * w.x + vec3(b.y, 0.0, b.z) * w.y + vec3(c.y, c.z, 0.0) * w.z;
+}
+// cellular noise on one projection plane: (F1, F2 - F1, cell hash) — rock facets and the cracks between them
+vec3 cell2(vec2 p) {
+  vec2 i = floor(p), f = fract(p); float d1 = 8.0, d2 = 8.0; vec2 id = vec2(0.0);
+  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+    vec2 g = vec2(float(x), float(y)), r = g + vec2(hash12(i + g), hash12(i + g + 19.7)) - f; float d = dot(r, r);
+    if (d < d1) { d2 = d1; d1 = d; id = i + g; } else if (d < d2) d2 = d;
+  }
+  return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), hash12(id + 3.1));
+}
+// triplanar chunky facets: each cell tilts the normal a random way; returns (normal offset, crack, facet shade)
+vec3 facetN(vec3 p, vec3 w, out float crack, out float shade) {
+  // cells on vertical planes are stretched upward: columnar blocks rather than paving stones
+  vec3 a = cell2(p.zy * vec2(1.0, 0.4)), b = cell2(p.xz + 11.0), c = cell2(p.xy * vec2(1.0, 0.4) + 23.0);
+  crack = (1.0 - smoothstep(0.0, 0.04, a.y)) * w.x + (1.0 - smoothstep(0.0, 0.04, b.y)) * w.y + (1.0 - smoothstep(0.0, 0.04, c.y)) * w.z;
+  shade = a.z * w.x + b.z * w.y + c.z * w.z;
+  float ta = a.z * 6.283, tb = b.z * 6.283, tc = c.z * 6.283;
+  return vec3(0.0, sin(ta), cos(ta)) * w.x + vec3(cos(tb), 0.0, sin(tb)) * w.y + vec3(sin(tc), cos(tc), 0.0) * w.z;
+}
 void main(){
-  vec3 N = normalize(vN); float slope = 1.0 - N.y;
+  vec3 Ng = normalize(vN), N = Ng; float slope = 1.0 - Ng.y;
+  vec3 tw = pow(abs(Ng), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
+  float dist = length(vWP - cameraPosition), near = 1.0 - smoothstep(250.0, 1100.0, dist);
   float wet = smoothstep(0.32, 0.8, vFlowN);
   vec3 g1 = vnoiseD(vWP.xz * 0.09), g2 = vnoiseD(vWP.xz * 0.31 + 5.0);
-  float bumpK = mix(0.05, 0.55, smoothstep(0.25, 0.55, slope)) * (1.0 - smoothstep(300.0, 1100.0, length(vWP - cameraPosition)));
-  N = normalize(N - vec3(g1.y + g2.y * 0.45, 0.0, g1.z + g2.z * 0.45) * bumpK);
+  N = normalize(N - vec3(g1.y + g2.y * 0.45, 0.0, g1.z + g2.z * 0.45) * 0.05 * near);
   float n1 = vnoise(vWP.xz * 0.06), pn = fbm(vWP.xz * 0.035);
   float alt = vWP.y;
   vec3 meadow = mix(mix(uMid, uTipB, 0.6), mix(uMid, uTipA, 0.62), smoothstep(0.35, 0.7, pn));
@@ -38,13 +65,30 @@ void main(){
   // ground under grass takes the blades' own mid tone (slightly shaded) so gaps between blades do not read as dark holes
   vec3 base = mix(meadow, mix(uMid, uTipB, 0.4) * 0.92, clamp(vCover, 0.0, 1.0) * 0.9);
   float wear = clamp(vWear, -2.0, 3.0);
-  float strata = sin(alt * 0.32 + n1 * 4.0 + vnoise(vWP.xz * 0.02) * 3.0) * 0.5 + 0.5;
-  vec3 rock = mix(vec3(0.38, 0.35, 0.31), vec3(0.58, 0.53, 0.46), strata * 0.6 + n1 * 0.4);
-  rock *= 1.0 - clamp(wear * 0.12, 0.0, 0.3);
-  float rockAmt = smoothstep(0.36, 0.6, slope + clamp(wear, 0.0, 3.0) * 0.06 - clamp(-wear, 0.0, 2.0) * 0.08 + (n1 - 0.5) * 0.16);
-  rock *= 0.86 + 0.28 * vnoise(vec2(vWP.x + vWP.z, vWP.y * 3.0) * 0.12);
+  // rock: chunky facets with dark cracks, irregular warped strata, vertical weathering streaks, warm grey-beige
+  // stone with lichen; strata widen with distance so they do not alias
+  float rockAmt = smoothstep(0.34, 0.56, slope + clamp(wear, 0.0, 3.0) * 0.06 - clamp(-wear, 0.0, 2.0) * 0.08 + (n1 - 0.5) * 0.16);
   float alpine = smoothstep(125.0, 215.0, alt + (n1 - 0.5) * 50.0) * (1.0 - wet * 0.75);
   rockAmt = max(rockAmt, alpine * 0.62);
+  vec3 rock = vec3(0.0);
+  if (rockAmt > 0.01) {
+    float bandH = mix(3.2, 10.0, smoothstep(150.0, 700.0, dist)) * (0.75 + 0.5 * triN(vWP * 0.02 + 5.0, tw));
+    float bf = fract((alt + triN(vWP * 0.03, tw) * 2.0 + triN(vWP * 0.008 + 3.0, tw) * 14.0) / bandH);
+    float ledge = smoothstep(0.0, 0.3, bf) * (1.0 - smoothstep(0.9, 1.0, bf));
+    vec2 th = vec2(-Ng.z, Ng.x); float thl = length(th);
+    float along = thl > 0.05 ? dot(vWP.xz, th / thl) : vWP.x;
+    float streak = vnoise(vec2(along * 0.45, alt * 0.03)) * 0.6 + vnoise(vec2(along * 1.3, alt * 0.08 + 3.0)) * 0.4;
+    float crack, fshade;
+    vec3 fN = facetN(vWP * mix(0.2, 0.06, smoothstep(60.0, 400.0, dist)), tw, crack, fshade);
+    float rn = triN(vWP * 0.16, tw) * 0.55 + triN(vWP * 0.55 + 9.0, tw) * 0.25 + triN(vWP * 0.04, tw) * 0.2;
+    rock = mix(vec3(0.6, 0.5, 0.43), vec3(0.84, 0.72, 0.6), rn * 0.45 + fshade * 0.55);
+    rock = mix(rock, vec3(0.38, 0.4, 0.3), smoothstep(0.55, 0.8, triN(vWP * 0.07 + 2.0, tw)) * 0.35);
+    rock *= mix(0.93, 1.02, ledge) * (0.88 + 0.16 * streak) * (1.0 - crack * 0.16 * near) * (1.0 - clamp(wear * 0.1, 0.0, 0.25));
+    // chiselled normals: facet tilt + fine triplanar bump + ledge tilt (ledge tops lean toward the sky)
+    vec3 gR = triG(vWP * 0.7 + 5.0, tw) * 0.4; gR -= Ng * dot(gR, Ng); fN -= Ng * dot(fN, Ng);
+    vec3 Nrock = normalize(Ng + fN * 0.6 * near - gR * 0.5 * near + vec3(0.0, (ledge - 0.5) * 0.5 * near, 0.0));
+    N = normalize(mix(N, Nrock, rockAmt));
+  }
   base = mix(base, rock, rockAmt);
   vec3 forestFloor = vec3(0.15, 0.26, 0.15) * (0.85 + 0.3 * n1);
   base = mix(base, forestFloor, clamp(vForest, 0.0, 1.0) * 0.85 * (1.0 - rockAmt * 0.5));
@@ -71,24 +115,35 @@ const farTerrainMat = terrainMat.clone();
 farTerrainMat.uniforms = terrainMat.uniforms;
 farTerrainMat.polygonOffset = true; farTerrainMat.polygonOffsetFactor = 2; farTerrainMat.polygonOffsetUnits = 2;
 
-const _nv = new THREE.Vector3();
-function gridGeometry(G, heights, extras) {
-  const n = G.n, pos = new Float32Array(n * n * 3), nor = new Float32Array(n * n * 3);
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i; pos[k * 3] = G.x(i); pos[k * 3 + 1] = heights[k]; pos[k * 3 + 2] = G.x(j); }
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const k = j * n + i, l = heights[j * n + Math.max(0, i - 1)], r = heights[j * n + Math.min(n - 1, i + 1)];
-    const d = heights[Math.max(0, j - 1) * n + i], u = heights[Math.min(n - 1, j + 1) * n + i];
-    const v = _nv.set(l - r, 2 * G.step, d - u).normalize();
-    nor[k * 3] = v.x; nor[k * 3 + 1] = v.y; nor[k * 3 + 2] = v.z;
+// Steep vertices are pushed in and out along their downhill direction by 3D noise, so cliffs read as craggy
+// rock instead of a smooth stretched sheet. Faded out near the DETAIL border so the two meshes still meet.
+function crag(G, pos, heights) {
+  const n = G.n, st = G.step, amp = G === DETAIL ? 1.8 : 3.4, f = G === DETAIL ? 0.1 : 0.05;
+  for (let j = 1; j < n - 1; j++) for (let i = 1; i < n - 1; i++) {
+    const k = j * n + i, dx = (heights[k + 1] - heights[k - 1]) / (2 * st), dz = (heights[k + n] - heights[k - n]) / (2 * st);
+    const g = Math.hypot(dx, dz), steep = smooth(0.7, 1.6, g);
+    if (steep <= 0) continue;
+    const x = pos[k * 3], y = pos[k * 3 + 1], z = pos[k * 3 + 2];
+    const din = Math.min(x - DETAIL.min, DETAIL.min + DETAIL.size - x, z - DETAIL.min, DETAIL.min + DETAIL.size - z);
+    const a = amp * steep * smooth(6, 24, Math.abs(din));
+    if (a <= 0) continue;
+    const o = (vnoise3(x * f, y * f, z * f) - 0.5) * 2 * a;
+    pos[k * 3] -= dx / g * o; pos[k * 3 + 2] -= dz / g * o;
+    pos[k * 3 + 1] += (vnoise3(x * f + 7.1, y * f, z * f - 3.3) - 0.5) * a * 0.6;
   }
+}
+
+function gridGeometry(G, heights, extras) {
+  const n = G.n, pos = new Float32Array(n * n * 3);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i; pos[k * 3] = G.x(i); pos[k * 3 + 1] = heights[k]; pos[k * 3 + 2] = G.x(j); }
+  crag(G, pos, heights);
   const idx = new Uint32Array((n - 1) * (n - 1) * 6); let o = 0;
   for (let j = 0; j < n - 1; j++) for (let i = 0; i < n - 1; i++) { const a = j * n + i, b = a + 1, c = a + n, d = c + 1; idx[o++] = a; idx[o++] = c; idx[o++] = b; idx[o++] = b; idx[o++] = c; idx[o++] = d; }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   for (const key in extras) g.setAttribute(key, new THREE.BufferAttribute(extras[key], 1));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
-  g.computeBoundingSphere();
+  g.computeVertexNormals(); g.computeBoundingSphere();
   return g;
 }
 

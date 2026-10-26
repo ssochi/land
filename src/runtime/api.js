@@ -54,6 +54,8 @@ export function makeAPI(session) {
     raise: (x, z, radius, height, shape) => terr('hill', { x, z, radius, height, shape: shape || 'gauss' }),
     lower: (x, z, radius, depth, shape) => terr('hill', { x, z, radius, height: -Math.abs(depth), shape: shape || 'smooth' }),
     flatten: (x, z, o = {}) => terr('flatten', Object.assign({ x, z }, o)),
+    plateau: (x, z, o = {}) => terr('plateau', Object.assign({ x, z }, o)),
+    terrace: (x, z, o = {}) => terr('terrace', Object.assign({ x, z }, o)),
     smooth: (x, z, o = {}) => terr('smooth', Object.assign({ x, z }, o)),
     erode: (o = {}) => terr('erode', o, (p, r) => add(r, `${p.droplets} 滴 · ${p.grid}`)),
     thermal: (o = {}) => terr('thermal', o, (p, r) => add(r, `${p.iterations} 轮 · 安息角 ${p.talus}°`)),

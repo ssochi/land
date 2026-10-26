@@ -46,7 +46,7 @@ vec3 lighting(vec3 alb, vec3 N, vec3 wp, float sharp) {
     }
   }
   gShadow = shadowAt(wp, N) * cloudShadow(wp.xz) * ts;
-  vec3 amb = mix(uGroundAmb, uSkyAmb, N.y * 0.5 + 0.5) * mix(0.5, 1.05, sv);
+  vec3 amb = (mix(uGroundAmb, uSkyAmb, N.y * 0.5 + 0.5) * 1.18 + uGroundAmb * 0.35 * (1.0 - abs(N.y))) * mix(0.6, 1.05, sv);
   return alb * (amb + uSunColor * diff * gShadow);
 }
 // height fog + aerial perspective (distant land collapses into a flat haze-coloured silhouette)
