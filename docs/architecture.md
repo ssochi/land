@@ -11,7 +11,8 @@ world     DETAIL / FAR 两层高度网格，派生标量场（WATER、WDIST、FL
 terrain   塑形操作（noise、mountains、peak、hill、flatten、plateau、terrace、smooth、apply）、侵蚀（erode、thermal）、土路（path.js）、
           崖面位移（crag.js：网格和 groundAt 共用，物件 / 草 / 第一人称都踩在实际画出的岩面上）。
 water     河道开挖（river.js）、湖泊泛洪（lake.js），水体场的惰性重算（water.js）。
-objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures / undergrowth 生成器）、scatter / place、草场烘焙（密度 / 高度 / 地面 / 遮蔽贴图）。
+objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures / undergrowth / buildings / village-props 生成器）、
+          村庄布局（village.js：m.village / m.building / m.fence / m.field 的逻辑）、scatter / place、草场烘焙（密度 / 高度 / 地面 / 遮蔽贴图）。
   ↓
 runtime   参数 schema 与校验、scene.js 拿到的 `m` 对象（api.js）、不含渲染的世界生成流程（generate.js）。
   ↓
@@ -61,6 +62,12 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称�
 
 1. 在 `src/objects/` 写生成器 `makeXxx(seed)`，用 `mesh-builder.js` 的 `MB` 和各种 `add*` 拼网格，返回 `BufferGeometry`。
 2. 在 `src/objects/kinds.js` 的 `KINDS` 登记（变体数、材质族、间距、遮蔽等），在 `KIND_DOCS` 写一句说明。
+3. LOD：生成器接收第二个参数 `lod`（0 最精细），在 `KINDS` 里写 `lod: [d1, d2]` 切换距离（米），需要远处剔除的写 `cull`。`render/props.js` 每帧按距离把实例分到各级的 InstancedMesh 里。
+4. 依赖脚本参数的模型（比如指定尺寸的房屋）用 `customVariant(kind, params)` 换一个 ≥1000 的变体号，生成器的第三个参数就是这份参数。
+
+**材质卡号**（顶点属性 `aCard`，`render/props.js` 的着色器按它选材质）：0 顶点色 · 1 叶片卡片 · 2 砌石（砌缝由着色器画）· 3 岩石贴图（三向投影，随 `m.env({ rock })` 换色）· 4 茅草 · 5 木瓦 · 6 窗玻璃（白天暗、夜里亮）· 7 木板 · 8 灰泥 · 9 陶土瓦 · 10 乱石 · 11 灯罩（白天也微亮）· 20 以上是风车叶轮（绕轮毂转动，卡号 − 20 是材质）。4–11 用米为单位的 uv 采样 `texgen.js` 烘焙的贴图。
+
+模型的 `userData` 可以带 `colliders`（第一人称和后续放置的避让圆）、`lights`（点光源位置和半径）、`smoke`（炊烟起点），实例化时按实例的位置、朝向、缩放变换后交给对应系统。
 
 ## 测试
 
@@ -69,7 +76,8 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称�
 - `core.test.js`：随机数、噪声、堆。
 - `schema.test.js`：默认值、必填、类型错误、未知参数告警。
 - `walker.test.js`：第一人称的步行 / 冲刺速度、跳跃高度、悬崖挡路而矮坎能跳上去、飞行与落地、树和墙的碰撞、深水游泳。
-- `features.test.js`：台地的顶面和崖壁坡度、土路找平且不放置物件、树荫规则、河流入湖时水面降到湖面并截断。
+- `features.test.js`：台地的顶面和崖壁坡度、土路找平且不放置物件、树荫规则、河流入湖时水面降到湖面并截断、草场遮罩、崖面上的物件贴着位移后的岩面。
+- `village.test.js`：每种风格和朝向的房屋几何有效、LOD 逐级减面；固定参数后换 seed 模型不变；`flatten` 的 cut 模式只削不填；坡地房屋削坡建台、门前落差有限；`m.village` 可复现、房屋互不重叠、门朝着附近的街。
 - `scene.test.js`：在 Node 里完整生成示例场景，锁定水位、地形范围和每种模型的数量（与浏览器里的报告一致）；以及脚本出错时的行号、调用返回值可被后续调用使用。
 
 改动生成算法导致 `scene.test.js` 的数字变化是预期内的，确认画面后更新期望值即可；纯重构不应该让它变化。

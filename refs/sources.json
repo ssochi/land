@@ -84,5 +84,46 @@
       ]
     ],
     "notes": "傍晚的草坡，两侧是高大的岩壁和岩峰：看岩石的起伏细节、裂隙和冷暖变化"
+  },
+  "hateno": {
+    "file": "hateno.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/1/10/BotW_Hateno_Village.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Hateno_Village.png",
+    "scene": "scenes/village.js",
+    "camera": "overview",
+    "mask": [
+      [
+        0.03,
+        0.03,
+        0.1,
+        0.08
+      ]
+    ],
+    "notes": "从坡上俯看哈特诺村：赭黄灰泥墙、陶土瓦顶、高烟囱和圆塔，房屋顺坡分布，路边路灯，崖壁和远山在雾里"
+  },
+  "hateno-street": {
+    "file": "hateno-street.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/9/90/BotW_Hateno_Village_2.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Hateno_Village_2.png",
+    "scene": "scenes/village.js",
+    "camera": "lane",
+    "mask": [],
+    "notes": "村内街景：塔楼、拱门、风车、白色石灰岩崖、近处的瓦屋顶和挂着布幡的烟囱"
+  },
+  "hateno-house": {
+    "file": "hateno-house.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/6/62/BotW_Village_Chief%27s_House.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Village_Chief%27s_House.png",
+    "scene": "scenes/village.js",
+    "camera": "door",
+    "mask": [
+      [
+        0.03,
+        0.03,
+        0.1,
+        0.08
+      ]
+    ],
+    "notes": "近看村长家：赭黄墙面、乱石勒脚、深色木椽和封檐板、带百叶窗和花箱的窗、门上小雨棚、门边壁灯"
   }
 }

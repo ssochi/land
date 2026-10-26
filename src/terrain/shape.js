@@ -74,8 +74,10 @@ export function hill(p) {
   });
 }
 
+// mode 'cut' only lowers ground above the target (a shelf cut into a slope), 'fill' only raises ground below it
 export function flatten(p) {
   eachCell((x, z, h) => {
+    if ((p.mode === 'cut' && h <= p.height) || (p.mode === 'fill' && h >= p.height)) return h;
     const d = warpedDist(x, z, p.x, p.z, p.radius, p.warp, p.seed);
     const w = smooth(p.radius + p.falloff, p.radius, d) * p.strength;
     return h + (p.height - h) * w;

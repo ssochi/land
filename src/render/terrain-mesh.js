@@ -3,25 +3,25 @@
 import * as THREE from 'three';
 import { DETAIL, FAR, detailW } from '../world/grid.js';
 import { cragOffset } from '../terrain/crag.js';
-import { WATER, WDIST, OCC, COVER, FOREST_D, FOREST_F, FLOW_D, FLOW_F, PATH, ensureFlow } from '../world/fields.js';
+import { WATER, WDIST, OCC, COVER, FOREST_D, FOREST_F, FLOW_D, FLOW_F, PATH, TILL, TILL_DIR, ensureFlow } from '../world/fields.js';
 import { mat } from './material.js';
-import { PAL } from './uniforms.js';
+import { PAL, ROCK_TINT } from './uniforms.js';
 import { SHADOW, REFLECT } from './layers.js';
 import GRASS_TONE from './shaders/grass-tone.glsl.js';
 
 export const terrainMat = mat(`
-attribute float aWear; attribute float aShore; attribute float aDepth; attribute float aCover; attribute float aOcc; attribute float aHide; attribute float aForest; attribute float aFlowN; attribute float aPath;
-varying vec3 vWP; varying vec3 vN; varying float vWear; varying float vShore; varying float vDepth; varying float vCover; varying float vOcc; varying float vForest; varying float vFlowN; varying float vPath;
+attribute float aWear; attribute float aShore; attribute float aDepth; attribute float aCover; attribute float aOcc; attribute float aHide; attribute float aForest; attribute float aFlowN; attribute float aPath; attribute float aTill; attribute float aTillDir;
+varying vec3 vWP; varying vec3 vN; varying float vWear; varying float vShore; varying float vDepth; varying float vCover; varying float vOcc; varying float vForest; varying float vFlowN; varying float vPath; varying float vTill; varying vec2 vTillDir;
 void main(){
-  vForest = aForest; vFlowN = aFlowN; vPath = aPath;
+  vForest = aForest; vFlowN = aFlowN; vPath = aPath; vTill = aTill; vTillDir = vec2(cos(aTillDir), sin(aTillDir));
   vec3 p = position; p.y -= aHide * 8.0;
   vec4 w = modelMatrix * vec4(p, 1.0);
   vWP = w.xyz; vN = normal; vWear = aWear; vShore = aShore; vDepth = aDepth; vCover = aCover; vOcc = aOcc;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`, `
-uniform vec3 uRoot, uMid, uTipA, uTipB, uSand; uniform float uSnowLine;
+uniform vec3 uRoot, uMid, uTipA, uTipB, uSand, uRockTint; uniform float uSnowLine;
 uniform sampler2D uRockA, uRockN, uSwardA, uSwardN, uDirtA, uDirtN;   // baked by src/render/texgen.js
-varying vec3 vWP; varying vec3 vN; varying float vWear; varying float vShore; varying float vDepth; varying float vCover; varying float vOcc; varying float vForest; varying float vFlowN; varying float vPath;
+varying vec3 vWP; varying vec3 vN; varying float vWear; varying float vShore; varying float vDepth; varying float vCover; varying float vOcc; varying float vForest; varying float vFlowN; varying float vPath; varying float vTill; varying vec2 vTillDir;
 ${GRASS_TONE}
 // triplanar value noise: world-space detail that does not stretch down cliff faces
 float triN(vec3 p, vec3 w) { return vnoise(p.zy) * w.x + vnoise(p.xz) * w.y + vnoise(p.xy) * w.z; }
@@ -71,6 +71,17 @@ void main(){
   float cavD; vec3 Nd = triNormal(uDirtN, vWP, N, vec3(0.0, 1.0, 0.0), 1.0 / 3.2, 1.0, cavD);
   dirt *= mix(0.7, 1.0, cavD);
   base = mix(base, dirt, worn); N = normalize(mix(N, Nd, worn));
+  // ploughed field: ridges and furrows along the field's direction (filtered so they fade, not alias, far away)
+  float till = smoothstep(0.25, 0.7, vTill);
+  if (till > 0.0) {
+    float fu = dot(vWP.xz, vec2(-vTillDir.y, vTillDir.x)) / 0.8, fwu = fwidth(fu), ridge = 0.5 + 0.5 * cos(fu * 6.2831);
+    ridge = mix(0.5, ridge, 1.0 - smoothstep(0.2, 0.6, fwu));
+    vec3 soil = texture2D(uDirtA, vWP.xz / 2.6).rgb * vec3(0.78, 0.7, 0.62) * mix(0.62, 1.08, ridge);
+    soil = mix(soil, mix(gMid, gTip, 0.2) * 0.75, smoothstep(0.55, 0.9, ridge) * 0.35 * vnoise(vWP.xz * 0.7));   // weeds along the ridges
+    base = mix(base, soil, till);
+    vec3 fN = normalize(vec3(-vTillDir.y, 0.0, vTillDir.x)) * sin(fu * 6.2831) * 0.35 * (1.0 - smoothstep(0.2, 0.6, fwu));
+    N = normalize(N + fN * till);
+  }
   float wear = clamp(vWear, -2.0, 3.0);
   // rock: chunky facets with dark cracks, irregular warped strata, vertical weathering streaks, warm grey-beige
   // stone with lichen; strata widen with distance so they do not alias
@@ -90,7 +101,7 @@ void main(){
     vec3 tint = mix(vec3(0.95, 0.8, 0.7), vec3(1.05, 0.93, 0.83), triN(vWP * 0.03 + 4.0, tw));
     tint = mix(tint, vec3(0.8, 0.8, 0.78), smoothstep(0.55, 0.75, triN(vWP * 0.012 + 8.0, tw)) * 0.5);
     tint = mix(tint, vec3(0.95, 0.78, 0.55), smoothstep(0.6, 0.8, triN(vWP * 0.02 + 2.0, tw)) * 0.3);
-    rock = alb * tint;
+    rock = alb * tint * uRockTint;   // m.env({ rock }) shifts the whole palette (pale limestone, red sandstone)
     rock = mix(rock, vec3(0.42, 0.47, 0.3), smoothstep(0.55, 0.8, triN(vWP * 0.07 + 2.0, tw)) * smoothstep(0.25, 0.75, Nrock.y) * 0.6);
     float bed = sin((alt + triN(vWP * 0.01, tw) * 18.0) * 0.55) * 0.5 + 0.5;
     vec2 th = vec2(-Ng.z, Ng.x); float thl = length(th);
@@ -119,7 +130,7 @@ void main(){
     gl_FragColor = vec4(c, 1.0); return;
   }
   gl_FragColor = vec4(applyFog(c, vWP), 1.0);
-}`, { uRoot: { value: PAL.root }, uMid: { value: PAL.mid }, uTipA: { value: PAL.tipA }, uTipB: { value: PAL.tipB }, uSand: { value: PAL.sand }, uSnowLine: { value: 170 },
+}`, { uRoot: { value: PAL.root }, uMid: { value: PAL.mid }, uTipA: { value: PAL.tipA }, uTipB: { value: PAL.tipB }, uSand: { value: PAL.sand }, uRockTint: ROCK_TINT, uSnowLine: { value: 170 },
   uRockA: { value: null }, uRockN: { value: null }, uSwardA: { value: null }, uSwardN: { value: null }, uDirtA: { value: null }, uDirtN: { value: null } },
   { extensions: { derivatives: true } });
 
@@ -166,7 +177,7 @@ export function buildTerrainMeshes(group, B) {
   for (let k = 0; k < nD * nD; k++) { shore[k] = WDIST[k]; depth[k] = WATER[k] > -1e8 ? Math.max(0, WATER[k] - B[k]) : 0; }
   // fold FAR-grid fields into the DETAIL mesh across the seam
   for (let j = 0; j < nD; j++) for (let i = 0; i < nD; i++) { const x = DETAIL.x(i), z = DETAIL.x(j), w = detailW(x, z), k = j * nD + i; dWear[k] = DETAIL.wear[k] + FAR.sample(x, z, FAR.wear) * (1 - w); FOREST_D[k] = Math.max(FOREST_D[k], FAR.sample(x, z, FOREST_F) * (1 - w)); flowAttr[k] = FLOW_D[k] * w + FAR.sample(x, z, FLOW_F) * (1 - w); }
-  const detailMesh = new THREE.Mesh(gridGeometry(DETAIL, B, { aWear: dWear, aShore: shore, aDepth: depth, aCover: COVER, aOcc: OCC, aHide: hide, aForest: FOREST_D, aFlowN: flowAttr, aPath: PATH }), terrainMat);
+  const detailMesh = new THREE.Mesh(gridGeometry(DETAIL, B, { aWear: dWear, aShore: shore, aDepth: depth, aCover: COVER, aOcc: OCC, aHide: hide, aForest: FOREST_D, aFlowN: flowAttr, aPath: PATH, aTill: TILL, aTillDir: TILL_DIR }), terrainMat);
   detailMesh.layers.enable(SHADOW); detailMesh.layers.enable(REFLECT);
   group.add(detailMesh);
   // FAR vertices well inside DETAIL are sunk 8m (aHide) so they never poke through
@@ -175,6 +186,6 @@ export function buildTerrainMeshes(group, B) {
     const x = FAR.x(i), z = FAR.x(j), din = Math.min(x - DETAIL.min, DETAIL.min + DETAIL.size - x, z - DETAIL.min, DETAIL.min + DETAIL.size - z);
     fHide[j * nF + i] = din > FAR.step * 1.6 ? 1 : 0;
   }
-  const farMesh = new THREE.Mesh(gridGeometry(FAR, FAR.h, { aWear: FAR.wear, aShore: fShore, aDepth: fZero, aCover: fZero, aOcc: fZero, aHide: fHide, aForest: FOREST_F, aFlowN: FLOW_F, aPath: fZero }), farTerrainMat);
+  const farMesh = new THREE.Mesh(gridGeometry(FAR, FAR.h, { aWear: FAR.wear, aShore: fShore, aDepth: fZero, aCover: fZero, aOcc: fZero, aHide: fHide, aForest: FOREST_F, aFlowN: FLOW_F, aPath: fZero, aTill: fZero, aTillDir: fZero }), farTerrainMat);
   farMesh.layers.enable(REFLECT); group.add(farMesh);
 }

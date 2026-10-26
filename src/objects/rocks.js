@@ -19,9 +19,10 @@ function icoIndexed(detail) {
 const ICO = {};
 
 // kind: 'pebble' | 'boulder' | 'cliff'
-export function makeRock(seed, kind) {
-  const R = mulberry32(seed), pebble = kind === 'pebble', cliff = kind === 'cliff';
-  const { verts, idx } = ICO[pebble ? 2 : 4] || (ICO[pebble ? 2 : 4] = icoIndexed(pebble ? 2 : 4));
+// lod lowers the subdivision (the shape function is the same, so levels match in silhouette)
+export function makeRock(seed, kind, lod = 0) {
+  const R = mulberry32(seed), pebble = kind === 'pebble', cliff = kind === 'cliff', det = Math.max(1, (pebble ? 2 : 4) - lod);
+  const { verts, idx } = ICO[det] || (ICO[det] = icoIndexed(det));
   const planes = [], K = pebble ? 3 : cliff ? 9 : 6;
   for (let k = 0; k < K; k++) {
     let n;

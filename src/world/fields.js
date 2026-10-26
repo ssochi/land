@@ -13,11 +13,12 @@ export const COVER = new Float32Array(ND);              // grass coverage, tints
 export const FOREST_D = new Float32Array(ND), FOREST_F = new Float32Array(NF);
 export const FLOW_D = new Float32Array(ND), FLOW_F = new Float32Array(NF);
 export const PATH = new Float32Array(ND);                // worn track 0–1 (m.path)
+export const TILL = new Float32Array(ND), TILL_DIR = new Float32Array(ND);   // ploughed field 0–1 and furrow angle (m.field)
 
 let flowVer = -1;
 
 export function resetFields() {
-  WATER.fill(-1e9); WDIST.fill(999); OCC.fill(0); COVER.fill(0); FOREST_D.fill(0); FOREST_F.fill(0); PATH.fill(0);
+  WATER.fill(-1e9); WDIST.fill(999); OCC.fill(0); COVER.fill(0); FOREST_D.fill(0); FOREST_F.fill(0); PATH.fill(0); TILL.fill(0); TILL_DIR.fill(0);
   flowVer = -1;
 }
 
@@ -31,6 +32,7 @@ export function waterLevelAt(x, z) {
 export function waterDistAt(x, z) { return DETAIL.inside(x, z) ? DETAIL.sample(x, z, WDIST) : 999; }
 
 export function pathAt(x, z) { return DETAIL.inside(x, z) ? DETAIL.sample(x, z, PATH) : 0; }
+export function tillAt(x, z) { return DETAIL.inside(x, z) ? DETAIL.sample(x, z, TILL) : 0; }
 
 // multiple-flow-direction accumulation (Freeman 1991): each cell passes its area downhill, split by slope^1.1
 export function computeFlow(G, out) {

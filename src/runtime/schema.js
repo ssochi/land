@@ -20,7 +20,7 @@ export const SCHEMA = {
     shape: [STR, 'gauss', 'gauss | smooth | plateau'], warp: [NUM, 0, '轮廓扭曲，米：让边缘不再是正圆'], seed: [NUM, 0, ''] } },
   flatten:   { phase: 'terrain', desc: '把区域向目标高度压平。', params: {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], radius: [NUM, undefined, '核心半径'], height: [NUM, undefined, '目标高度'],
-    falloff: [NUM, 20, '过渡宽度'], strength: [NUM, 1, '0–1'], warp: [NUM, 0, '轮廓扭曲，米'], seed: [NUM, 0, ''] } },
+    falloff: [NUM, 20, '过渡宽度'], strength: [NUM, 1, '0–1'], warp: [NUM, 0, '轮廓扭曲，米'], mode: [STR, 'both', 'both | cut（只削低高处，坡上开出平台）| fill（只填高低处）'], seed: [NUM, 0, ''] } },
   plateau:   { phase: 'terrain', desc: '台地：把区域整体抬高，四周是近乎垂直的崖壁（初始台地那种）。顶面保留原有起伏，ledges 让崖壁分出几级岩层台阶。', params: {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], radius: [NUM, undefined, '顶面半径'], height: [NUM, undefined, '抬升高度'],
     cliff: [NUM, 8, '崖壁水平宽度，米：越小越陡'], ledges: [NUM, 2, '崖壁台阶数'], warp: [NUM, 20, '轮廓扭曲，米'], seed: [NUM, 0, ''] } },
@@ -51,13 +51,30 @@ export const SCHEMA = {
     center: [XZ, [0, 0], ''], radius: [NUM, 80, ''], density: [NUM, 1, '密度倍率'], height: [NUM, 1, '草高倍率：1 是 0.2–0.7m 的草甸，2 左右是没膝的高草'],
     rules: [OBJ, {}, '同 scatter.rules'] } },
   env:       { phase: 'env', desc: '环境：时刻、风、雾、雪线、配色。', params: {
-    time: [NUM, 0.3, '0 清晨 · 0.5 正午 · 1 黄昏'], wind: [NUM, 0.5, '0–1'], windDir: [XZ, [0.86, -0.48], ''],
+    time: [NUM, 0.3, '0 清晨 · 0.5 正午 · 1 黄昏 · 1.25 入夜（窗户和灯笼亮起）'], wind: [NUM, 0.5, '0–1'], windDir: [XZ, [0.86, -0.48], ''],
     fogDensity: [NUM, null, '覆盖时刻预设的雾'], haze: [STR, null, '雾色（十六进制），与时刻预设混合：绿地偏青绿、荒地偏暖'],
     hazeFar: [NUM, 0.45, '远景雾化 0–1：越大，远山越像只剩轮廓的平面剪影'],
     valleyFog: [OBJ, null, '山谷雾层 {height: 雾顶高度米, thickness: 衰减厚度米, density}，低处出现成片飘动的雾'],
     clouds: [NUM, 0.5, '云量 0–1'], glare: [NUM, 1, '太阳眩光强度'],
     snowLine: [NUM, 170, '雪线，米'], streaks: [BOOL, true, '风痕'], pollen: [BOOL, true, '飞絮'],
+    rock: [STR, null, '岩石主色（十六进制）：#d6d2c6 灰白石灰岩 · #b4876a 红砂岩 · 缺省 #977d69 暖灰褐'],
     grass: [OBJ, null, '{root,mid,tipA,tipB} 十六进制'], water: [OBJ, null, '{shallow,deep}'] } },
+  village:   { phase: 'objects', desc: '一键生成村庄：主街和支路穿过中心广场（水井、集市摊、灯笼），房屋沿路排开、门朝街，宅基地自动压平；后院围篱笆种菜，门口堆木桶木箱柴堆，沿路立灯笼，空地种树，村外开田、立风车和路牌。避开水面、陡坡和彼此。坡地上的房屋削坡建在乱石台基上、门前有石阶。返回每栋房屋（含门口和门前街道上的点 street）、道路、田地的位置，便于继续加工和取镜头。放在河流之后、其他散布之前；湖最好在它之后建（它会改地形），湖边村子则先建湖，房屋会离水 3 米以上。', params: {
+    center: [XZ, undefined, '村中心（广场）'], radius: [NUM, 55, '村子半径，米'], houses: [NUM, 12, '房屋数量（目标）'],
+    style: [STR, 'mixed', 'hateno | stone | timber | hut | mixed（哈特诺式为主的混合）'], gaps: [NUM, 0.15, '沿街留空地的比例 0–1（种树、菜园）'], roads: [ARR, null, '自定义道路：一条 [[x,z],…] 或多条 [[[x,z],…], …]；缺省自动生成主街和支路'],
+    plaza: [NUM, 9, '广场半径，0 不要广场'], fields: [NUM, 2, '村外田地块数'], fences: [NUM, 0.55, '围篱笆后院的比例 0–1'],
+    lanterns: [NUM, 16, '路灯间距，米；0 不要'], props: [NUM, 1, '杂物多少 0–2'], trees: [NUM, 1, '树木多少 0–2'], windmill: [BOOL, true, '在村外高处立风车'], seed: [NUM, 0, ''] } },
+  building:  { phase: 'objects', desc: '按参数盖一栋房屋（门朝 rotation 方向的 +z），默认先把宅基地压平。缺省的参数按 seed 随机。返回房屋尺寸和门口坐标。', params: {
+    x: [NUM, undefined, ''], z: [NUM, undefined, ''], style: [STR, 'hateno', 'hateno（赭黄灰泥墙、陶瓦顶、高烟囱）| stone | timber | hut'], rotation: [NUM, 0, '弧度，0 = 门朝 +z'],
+    front: [STR, null, 'eave（长边朝街）| gable（山墙朝街）'], width: [NUM, null, '正面宽，米'], depth: [NUM, null, '进深，米'], floors: [NUM, null, '1 或 2'],
+    roof: [STR, null, 'tile | shingle | thatch'], pitch: [NUM, null, '屋面坡度，度'], chimney: [BOOL, null, '烟囱（哈特诺式多为贴着山墙的高烟囱）'],
+    tower: [BOOL, null, '屋后角上的圆塔'], banner: [BOOL, null, '临街墙上挂布幡'], porch: [BOOL, null, '门廊'], tint: [NUM, null, '百叶窗和布幡的配色编号'],
+    flatten: [BOOL, true, '先压平宅基地'], seed: [NUM, 0, ''] } },
+  fence:     { phase: 'objects', desc: '沿折线立篱笆（每段 2.4m）：木栅栏或干砌石矮墙。gates 是留空当门的段号。', params: {
+    path: [PATH, undefined, '[[x,z],…]'], style: [STR, 'wood', 'wood | stone'], gates: [ARR, [], '留空的段号，如 [0, 5]'] } },
+  field:     { phase: 'objects', desc: '开一块田：地面翻成带垄沟的耕地，按行种上作物，可选围篱笆。', params: {
+    center: [XZ, undefined, ''], size: [XZ, [18, 12], '[长, 宽]，米；垄沿长边'], rotation: [NUM, 0, '弧度'], crop: [STR, 'wheat', 'wheat | cabbage'],
+    fence: [STR, null, 'wood | stone，缺省不围'], seed: [NUM, 0, ''] } },
   camera:    { phase: 'env', desc: '镜头预设。用 at/look 贴地写（eye 为离地高度），或用 pos/target 绝对坐标。第一个为默认镜头。', params: {
     name: [STR, undefined, '只用字母数字，可作 #锚点'], label: [STR, null, '显示名'], at: [XZ, null, ''], eye: [NUM, 2.5, ''],
     look: [XZ, null, ''], lookEye: [NUM, 2, ''], pos: [ARR, null, '[x,y,z]'], target: [ARR, null, '[x,y,z]'],
@@ -74,7 +91,7 @@ export const SIGS = {
   mountains: 't.mountains({ inner, outer, height, base, scale, warp, seed, style, ridges })',
   peak: 't.peak(x, z, { radius, height, sharpness, ridges, seed })',
   hill: 't.hill(x, z, { radius, height, shape, warp })   简写：t.raise(x, z, r, h) · t.lower(x, z, r, depth)',
-  flatten: 't.flatten(x, z, { radius, height, falloff, strength, warp })',
+  flatten: 't.flatten(x, z, { radius, height, falloff, strength, warp, mode })',
   plateau: 't.plateau(x, z, { radius, height, cliff, ledges, warp, seed })',
   terrace: 't.terrace(x, z, { radius, step, sharpness, falloff })',
   smooth: 't.smooth(x, z, { radius, iterations, strength })',
@@ -87,13 +104,16 @@ export const SIGS = {
   scatter: 'm.scatter(kind, { count, area, rules, scale, minSpacing, cluster, seed })  → { placed, requested, rejected, positions }',
   place: 'm.place(kind, x, z, { scale, rotation, variant })  → { x, y, z }',
   grass: 'm.grass({ center, radius, density, height, rules })',
-  env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, snowLine, streaks, pollen, grass, water })',
+  env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, snowLine, streaks, pollen, rock, grass, water })',
+  village: 'm.village({ center, radius, houses, style, gaps, roads, plaza, fields, fences, lanterns, props, trees, windmill, seed })',
+  building: 'm.building(x, z, { style, rotation, front, width, depth, floors, roof, pitch, chimney, tower, banner, porch, tint, flatten, seed })',
+  fence: 'm.fence(path, { style, gates })', field: 'm.field({ center, size, rotation, crop, fence, seed })',
   camera: 'm.camera(name, { label, at, eye, look, lookEye, fov } | { label, pos, target, fov })'
 };
 
 // op name -> how the call is spelled in scene.js (report rows)
 export const CALL = { noise: 't.noise', mountains: 't.mountains', peak: 't.peak', hill: 't.hill', flatten: 't.flatten', plateau: 't.plateau', terrace: 't.terrace', smooth: 't.smooth', erode: 't.erode', apply: 't.apply', thermal: 't.thermal',
-  river: 'm.water.river', lake: 'm.water.lake', path: 'm.path', scatter: 'm.scatter', place: 'm.place', grass: 'm.grass', env: 'm.env', camera: 'm.camera' };
+  river: 'm.water.river', lake: 'm.water.lake', path: 'm.path', scatter: 'm.scatter', place: 'm.place', grass: 'm.grass', env: 'm.env', camera: 'm.camera', village: 'm.village', building: 'm.building', fence: 'm.fence', field: 'm.field' };
 
 // fill defaults and type-check one call. Returns { error } or { p, warn, def }.
 export function validate(op) {

@@ -13,6 +13,7 @@ import { carvePath } from '../terrain/path.js';
 import { KINDS } from '../objects/kinds.js';
 import { opScatter, opPlace } from '../objects/placement.js';
 import { GRASS_OPS } from '../objects/grass.js';
+import { buildVillage, buildHouse, fenceAlong, plantField } from '../objects/village.js';
 import { CALL, validate } from './schema.js';
 
 export class SceneError extends Error {}
@@ -95,6 +96,22 @@ export function makeAPI(session) {
     scatter: (kind, o = {}) => call('scatter', Object.assign({ kind }, o), (p, r) => { ensureWater(); world.objectsTouched = true; return opScatter(p, r); }),
     place: (kind, x, z, o = {}) => call('place', Object.assign({ kind, x, z }, o), (p, r) => { ensureWater(); world.objectsTouched = true; return opPlace(p, r); }),
     grass: (o = {}) => call('grass', o, (p, r) => { GRASS_OPS.push({ p, rep: r }); r.note = '脚本结束后统一生成'; }),
+    village: (o = {}) => call('village', o, (p, r) => { late(r); ensureWater(); world.objectsTouched = true; return buildVillage(p, r); }),
+    building: (x, z, o = {}) => call('building', Object.assign({ x, z }, o), (p, r) => {
+      if (p.flatten) late(r); ensureWater(); world.objectsTouched = true;
+      const params = {}; for (const k of ['style', 'front', 'width', 'depth', 'floors', 'roof', 'pitch', 'chimney', 'tower', 'banner', 'porch', 'tint']) if (p[k] != null) params[k] = p[k];
+      const h = buildHouse(p.x, p.z, p.rotation, params, p.seed + 1, p.flatten);
+      add(r, `${h.style} · ${h.width}×${h.depth}m · ${h.floors} 层`);
+      return h;
+    }),
+    fence: (path, o = {}) => call('fence', Object.assign({ path }, o), (p, r) => { ensureWater(); world.objectsTouched = true; const n = fenceAlong(p.path, p.style, p.gates || []); add(r, `${n} 段`); return { spans: n }; }),
+    field: (o = {}) => call('field', o, (p, r) => {
+      ensureWater(); world.objectsTouched = true;
+      const [x, z] = p.center, [w, d] = p.size, n = plantField(x, z, w, d, p.rotation, p.crop, p.seed);
+      if (p.fence) { const c = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]].map(([a, b]) => { const lx = a * (w / 2 + 0.8), lz = b * (d / 2 + 0.8); return [x + lx * Math.cos(p.rotation) + lz * Math.sin(p.rotation), z - lx * Math.sin(p.rotation) + lz * Math.cos(p.rotation)]; }); fenceAlong(c, p.fence, [2]); }
+      add(r, `${n} 株${p.crop === 'cabbage' ? '卷心菜' : '麦子'}`);
+      return { plants: n };
+    }),
     env: (o = {}) => call('env', o, () => { Object.assign(session.env, o); }),
     camera: (name, o = {}) => call('camera', Object.assign({ name }, o), p => { const cams = session.cameras, i = cams.findIndex(c => c.name === p.name); if (i >= 0) cams[i] = p; else cams.push(p); }),
     name: s => { session.name = String(s); },

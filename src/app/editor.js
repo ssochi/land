@@ -9,7 +9,7 @@ import { distributeGrass } from '../objects/grass.js';
 import { cachedGeometries } from '../objects/kinds.js';
 import { validate } from '../runtime/schema.js';
 import { newSession, resetWorld, runScript, settleWater, terrainSummary } from '../runtime/generate.js';
-import { U, PAL } from '../render/uniforms.js';
+import { U, PAL, ROCK_TINT } from '../render/uniforms.js';
 import { computeHorizon } from '../render/horizon.js';
 import { createSky } from '../render/sky.js';
 import { terrainMat, buildTerrainMeshes, setTerrainTextures } from '../render/terrain-mesh.js';
@@ -17,6 +17,8 @@ import { buildWaterMeshes, MIST_PX } from '../render/water-mesh.js';
 import { createReflection } from '../render/reflection.js';
 import { buildInstances, setPropTextures } from '../render/props.js';
 import { createGrass } from '../render/grass.js';
+import { createLights } from '../render/lights.js';
+import { buildSmoke } from '../render/smoke.js';
 import { bakeTextures } from '../render/texgen.js';
 import { createStreaks } from '../render/wind-streaks.js';
 import { createPollen } from '../render/pollen.js';
@@ -41,14 +43,14 @@ export function createEditor(renderer, canvas) {
   const shadows = createShadows(renderer, scene, camera, controls);
   const post = createPost(renderer, scene, camera);
   const reflection = createReflection(renderer, scene, camera);
-  const grass = createGrass(scene);
+  const grass = createGrass(scene), lights = createLights();
   const textures = bakeTextures(renderer);
   setTerrainTextures(textures); setPropTextures(textures);
   MIST_PX.value = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
   const pointer = createPointerPush(canvas, camera);
 
   const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls, renderer, mode: 'orbit', textures };
-  let worldGroup = null;
+  let worldGroup = null, props = null;
 
   // ── first person ─────────────────────────────────────
   const ORBIT_FOV = 45, WALK_FOV = 62, touch = matchMedia('(pointer: coarse)').matches;
@@ -136,6 +138,10 @@ export function createEditor(renderer, canvas) {
     U.uVFog.value.set(vf.height != null ? vf.height : 0, vf.thickness || 12, E.valleyFog ? (vf.density != null ? vf.density : 0.02) : 0);
     U.uWind.value = reduceMotion ? Math.min(E.wind, 0.25) : E.wind; U.uWindDir.value.set(E.windDir[0], E.windDir[1]).normalize();
     terrainMat.uniforms.uSnowLine.value = E.snowLine;
+    // rock colour relative to what the cliffs average as painted (baked texture × strata tints × cavity), so the
+    // given colour is roughly what a sunlit cliff ends up as
+    const rk = new THREE.Color(E.rock || '#977d69'), ref = new THREE.Color('#977d69');
+    ROCK_TINT.value.set(rk.r / ref.r, rk.g / ref.g, rk.b / ref.b);
     streaks.visible = E.streaks && !reduceMotion; pollen.pts.visible = E.pollen;
     if (E.grass) for (const k of ['root', 'mid', 'tipA', 'tipB']) if (E.grass[k]) PAL[k].set(E.grass[k]);
     if (E.water) for (const k of ['shallow', 'deep']) if (E.water[k]) PAL[k].set(E.water[k]);
@@ -163,7 +169,8 @@ export function createEditor(renderer, canvas) {
     const tf = performance.now();
     ui.stage('生成水体与物件'); await tick();
     settleWater(report);
-    report.counts = buildInstances(worldGroup);
+    props = buildInstances(worldGroup); report.counts = props.counts;
+    lights.set(props.lights); buildSmoke(worldGroup, props.smoke);
     ui.stage('种草'); await tick();
     const gf = distributeGrass(isSmall ? 0.35 : 0.6);
     grass.setField(gf.field); report.counts.grassBlades = gf.total;
@@ -202,7 +209,7 @@ export function createEditor(renderer, canvas) {
     sky.position.copy(camera.position);
     U.uFogDensity.value = atmosphere.fogBase;
     pollen.m.uniforms.uCenter.value.set(controls.target.x, heightAt(controls.target.x, controls.target.z), controls.target.z);
-    grass.update(camera); shadows.update(); reflection.update(); post.render();
+    grass.update(camera); if (props) props.update(camera); lights.update(camera); shadows.update(); reflection.update(); post.render();
   }
 
   // advance animation time by sec in fixed 50ms steps (deterministic headless stepping)

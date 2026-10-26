@@ -4,7 +4,8 @@ export default /* glsl */`
 uniform float uTime; uniform float uWind; uniform vec2 uWindDir;
 uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 uSkyAmb; uniform vec3 uGroundAmb;
 uniform vec3 uFogColor; uniform vec3 uZenith; uniform float uFogDensity; uniform float uDebug;
-uniform float uHazeFar; uniform vec3 uVFog; uniform float uCloudCover; uniform float uGlare;
+uniform float uHazeFar; uniform vec3 uVFog; uniform float uCloudCover; uniform float uGlare; uniform float uNight;
+uniform vec4 uPL[12]; uniform vec3 uPLColor;
 uniform sampler2D uShadowMap; uniform mat4 uShadowMatrix; uniform float uShadowOn; uniform float uShadowTexel;
 uniform sampler2D uHz0; uniform sampler2D uHz1; uniform sampler2D uHzAO; uniform vec2 uHzMin; uniform float uHzSize;
 uniform vec4 uMA0; uniform vec4 uMA1; uniform vec4 uMB0; uniform vec4 uMB1; uniform float uHzW; uniform float uSunTan; uniform float uHzOn;
@@ -49,7 +50,14 @@ vec3 lighting(vec3 alb, vec3 N, vec3 wp, float sharp) {
   }
   gShadow = shadowAt(wp, N) * cloudShadow(wp.xz) * ts;
   vec3 amb = (mix(uGroundAmb, uSkyAmb, N.y * 0.5 + 0.5) * 1.18 + uGroundAmb * 0.35 * (1.0 - abs(N.y))) * mix(0.6, 1.05, sv);
-  return alb * (amb + uSunColor * diff * gShadow);
+  // warm pools of light around lanterns after dusk (soft wrap so the ground and walls both catch it)
+  vec3 pl = vec3(0.0);
+  if (uNight > 0.01) for (int i = 0; i < 12; i++) {
+    if (uPL[i].w <= 0.0) continue;
+    vec3 L = uPL[i].xyz - wp; float d = length(L), att = max(0.0, 1.0 - d / uPL[i].w);
+    pl += uPLColor * att * att * (max(dot(N, L / max(d, 1e-3)), 0.0) * 0.75 + 0.25);
+  }
+  return alb * (amb + uSunColor * diff * gShadow + pl * uNight);
 }
 // height fog + aerial perspective (distant land collapses into a flat haze-coloured silhouette)
 // + an optional valley-fog layer below uVFog.x (thickness uVFog.y, density uVFog.z) broken into drifting banks

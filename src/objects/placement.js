@@ -2,11 +2,11 @@
 import { mulberry32 } from '../core/math.js';
 import { fbm } from '../core/noise.js';
 import { DETAIL, FAR, heightAt, slopeAt, stampGrid } from '../world/grid.js';
-import { OCC, FOREST_D, FOREST_F, waterLevelAt, waterDistAt, moistureAt, sunAt, pathAt } from '../world/fields.js';
+import { OCC, FOREST_D, FOREST_F, waterLevelAt, waterDistAt, moistureAt, sunAt, pathAt, tillAt } from '../world/fields.js';
 import { KINDS, kindGeo } from './kinds.js';
 import { groundAt } from '../terrain/crag.js';
 
-export const INST = {};        // 'kind|variant|lo' -> [{ x, y, z, s, r, tilt }]
+export const INST = {};        // 'kind|variant' -> [{ x, y, z, s, r, tilt }] (the renderer picks each instance's LOD)
 const OBST = new Map();        // spatial hash (4m cells) -> [{ x, z, r }]: trunks and rocks that block later placements
 
 export function resetPlacement() { for (const k in INST) delete INST[k]; OBST.clear(); }
@@ -67,7 +67,7 @@ export function ruleCheck(x, z, rules, stats) {
   const h = heightAt(x, z);
   const wl = waterLevelAt(x, z);
   if (wl != null && wl > h - 0.05) { stats.water++; return false; }
-  if (pathAt(x, z) > 0.35) { stats.path++; return false; }
+  if (pathAt(x, z) > 0.35 || tillAt(x, z) > 0.35) { stats.path++; return false; }   // roads, plazas and ploughed fields
   if (rules.height && (h < rules.height[0] || h > rules.height[1])) { stats.height++; return false; }
   if (rules.slope) { const s = slopeAt(x, z); if (s < rules.slope[0] || s > rules.slope[1]) { stats.slope++; return false; } }
   if (rules.waterDist) { const d = waterDistAt(x, z); if (d < rules.waterDist[0] || d > rules.waterDist[1]) { stats.waterDist++; return false; } }
@@ -85,14 +85,13 @@ export function topRejects(stats) {
 
 function addInstance(kind, x, z, s, rot, variant, R) {
   const K = KINDS[kind];
-  const v = variant != null ? variant % K.variants : Math.floor(R() * K.variants);
-  const lo = K.lo && !DETAIL.inside(x, z) && Math.hypot(x, z) > K.lodDist;  // full model anywhere the camera can walk
-  const key = kind + '|' + v + '|' + (lo ? 1 : 0);
+  const v = variant != null ? (variant >= 1000 ? variant : variant % K.variants) : Math.floor(R() * K.variants);
+  const key = kind + '|' + v;
   (INST[key] || (INST[key] = [])).push({ x, z, y: groundAt(x, z) - K.sink * s, s, r: rot, tilt: K.tilt });   // on the drawn (craggy) ground
   if (K.colliders) {
     // footprint circles in model space, rotated like the instance (three.js Y rotation)
     const c = Math.cos(rot), sn = Math.sin(rot);
-    for (const [lx, lz, r] of kindGeo(kind, v, lo).userData.colliders) obstAdd(x + (lx * c + lz * sn) * s, z + (-lx * sn + lz * c) * s, r * s);
+    for (const [lx, lz, r] of kindGeo(kind, v).userData.colliders) obstAdd(x + (lx * c + lz * sn) * s, z + (-lx * sn + lz * c) * s, r * s);
   } else if (K.trunk) obstAdd(x, z, K.trunk * s);
   if (K.occ && DETAIL.inside(x, z)) stampGrid(DETAIL, OCC, x, z, K.canopy * s, K.occ, 0.8);
   if (K.forest) { stampGrid(FAR, FOREST_F, x, z, K.canopy * s * 1.7, 0.4, 1); if (DETAIL.inside(x, z)) stampGrid(DETAIL, FOREST_D, x, z, K.canopy * s * 1.5, 0.35, 1); }
@@ -131,6 +130,13 @@ export function opScatter(p, rep) {
   rep.data = { placed, requested: p.count, rejected: stats };
   if (placed < p.count * 0.6) { rep.status = 'warn'; rep.note += ' · 放置不足六成，放宽规则或扩大区域'; }
   return { placed, requested: p.count, rejected: stats, positions };
+}
+
+// place one instance without rules (village layout, fences, fields): returns false for an unknown kind
+export function placeKind(kind, x, z, { rotation = 0, scale = 1, variant = null } = {}) {
+  if (!KINDS[kind]) return false;
+  addInstance(kind, x, z, scale, rotation, variant, mulberry32(Math.round(x * 131 + z * 71)));
+  return true;
 }
 
 export function opPlace(p, rep) {

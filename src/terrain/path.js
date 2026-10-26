@@ -34,3 +34,14 @@ export function carvePath(p) {
   }
   return { length: Math.round(length) };
 }
+
+// a worn round patch (village plaza, yard): PATH raised inside radius r with a ragged edge
+export function wearDisc(x, z, r, wear = 0.9) {
+  const n = DETAIL.n, st = DETAIL.step;
+  const i0 = clamp(Math.floor((x - r - 2 - DETAIL.min) / st), 0, n - 1), i1 = clamp(Math.ceil((x + r + 2 - DETAIL.min) / st), 0, n - 1);
+  const j0 = clamp(Math.floor((z - r - 2 - DETAIL.min) / st), 0, n - 1), j1 = clamp(Math.ceil((z + r + 2 - DETAIL.min) / st), 0, n - 1);
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const px = DETAIL.x(i), pz = DETAIL.x(j), e = r * (0.85 + 0.3 * fbm(px * 0.12, pz * 0.12, 2, 9)), d = Math.hypot(px - x, pz - z);
+    PATH[j * n + i] = Math.max(PATH[j * n + i], smooth(e + 1, e * 0.6, d) * wear);
+  }
+}
