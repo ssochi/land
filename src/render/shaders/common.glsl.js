@@ -34,7 +34,9 @@ float gustAt(vec2 xz) { vec2 w = xz * 0.042 - uWindDir * uTime * (0.7 + uWind * 
 float cloudShadow(vec2 xz) { float c = fbm(xz * 0.0085 + uWindDir * uTime * 0.018 + vec2(3.7, 1.3)); return 1.0 - 0.45 * smoothstep(0.52, 0.68, c); }
 vec3 lighting(vec3 alb, vec3 N, vec3 wp, float sharp) {
   float ndl = dot(N, uSunDir);
-  float diff = smoothstep(-0.12 + sharp * 0.12, 0.5 - sharp * 0.32, ndl);
+  // a soft terminator (the stylised look) blended with a wrapped Lambert falloff, so gentle slopes still
+  // read as lit vs turned-away instead of all saturating to full sun
+  float diff = smoothstep(-0.12 + sharp * 0.12, 0.5 - sharp * 0.32, ndl) * mix(0.7, 1.0, smoothstep(0.0, 0.8, ndl));
   float ts = 1.0, sv = 1.0;
   if (uHzOn > 0.5) {
     vec2 huv = (wp.xz - uHzMin) / uHzSize;
@@ -57,7 +59,8 @@ vec3 applyFog(vec3 c, vec3 wp) {
   float f = 1.0 - exp(-d * uFogDensity * exp(-hAvg / 260.0));
   f = 1.0 - (1.0 - f) * (1.0 - uHazeFar * smoothstep(200.0, 1600.0, d));
   float s = pow(max(dot(dv / d, uSunDir), 0.0), 6.0);
-  vec3 fc = mix(uFogColor, mix(uFogColor, uZenith, 0.3), smoothstep(80.0, 950.0, d) * (1.0 - s * 0.8));
+  // distant land takes a deeper sky blue rather than washing out to the pale horizon colour
+  vec3 fc = mix(uFogColor, mix(uFogColor, uZenith, 0.5) * 0.9, smoothstep(80.0, 950.0, d) * (1.0 - s * 0.8));
   fc = mix(fc, uSunColor * 0.92 + uFogColor * 0.2, s * 0.5);
   c = mix(c, fc, f);
   if (uVFog.z > 0.0) {

@@ -117,6 +117,7 @@ export function createEditor(renderer, canvas) {
     if (!c) return false;
     exitWalk();
     const { pos, tgt } = resolveCam(c);
+    camera.fov = c.fov || ORBIT_FOV; camera.updateProjectionMatrix();
     camera.position.copy(pos); controls.target.copy(tgt); controls.update();
     ui.markCam(c.name || null);
     streaks.respawnAll();

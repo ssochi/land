@@ -14,13 +14,14 @@ export const A2C = { value: 0 };
 const propMat = (o) => mat(`
 attribute vec3 aColor; attribute float aSway; attribute vec2 aUV; attribute float aCard;
 uniform float uSwayAmp; uniform float uSwayFreq;
-varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard;
+varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH;
 void main(){
   vUV = aUV; vCard = aCard;
   mat4 m = modelMatrix * instanceMatrix;
   vec4 w = m * vec4(position, 1.0);
   vSP = w.xyz;   // unswayed: shadows are looked up here, matching the (unswayed) shadow pass, so swaying leaves do not shimmer
   vec3 root = (m * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  vH = w.y - root.y;   // height above the model's base (ivy climbs from the ground)
   float g = gustAt(root.xz);
   float ph = sin(uTime * uSwayFreq * (1.0 + uWind) + root.x * 0.37 + root.z * 0.23 + position.y * 0.5);
   float amt = aSway * uSwayAmp * (0.15 + uWind * (0.5 + 0.9 * g));
@@ -30,7 +31,7 @@ void main(){
   gl_Position = projectionMatrix * viewMatrix * w;
 }`, `
 uniform float uSharp; uniform float uTrans; uniform sampler2D uLeaf; uniform float uA2C;
-varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard;
+varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH;
 void main(){
   vec3 alb = vC; float alpha = 1.0;
   bool card = vCard > 0.5 && vCard < 1.5;
@@ -60,11 +61,16 @@ void main(){
     float bh = hash12(vec2(col, row) + 0.37);
     float streak = vnoise(vec2(dot(vSP.xz, tg) * 1.7, vSP.y * 0.06));   // rain streaks down the face
     alb *= mix(1.0, (0.86 + 0.28 * bh) * (0.9 + 0.16 * streak), detail) * (1.0 - 0.42 * joint);
+    // ivy: patches of leaves creeping up the walls from the ground, ragged at their upper edge
+    float along = dot(vSP.xz, tg), iv = vnoise(vec2(along * 0.45, vSP.y * 0.22) + 3.7) * 0.65 + vnoise(vec2(along * 1.6, vSP.y * 0.9)) * 0.35;
+    float ivy = smoothstep(0.56, 0.6, iv) * (1.0 - smoothstep(1.0, 5.5, vH - (iv - 0.5) * 6.0)) * (1.0 - step(0.9, abs(N.y)));
+    vec3 leaf = mix(vec3(0.17, 0.3, 0.12), vec3(0.42, 0.56, 0.2), vnoise(vSP.xz * 3.1 + vSP.y * 2.7) * mix(0.5, 1.0, detail));
+    alb = mix(alb, leaf, ivy);
   }
   vec3 c = lighting(alb, N, vSP, uSharp);
   vec3 V = normalize(vWP - cameraPosition);
   float back = pow(max(dot(V, uSunDir), 0.0), 3.0);
-  c += uSunColor * alb * back * (uTrans + vCard * 0.35) * gShadow;
+  c += uSunColor * mix(alb, vec3(0.72, 0.86, 0.3), card ? 0.35 : 0.0) * back * (uTrans + (card ? 0.45 : 0.0)) * gShadow;   // leaves glow when backlit
   float rim = pow(1.0 - max(dot(N, -V), 0.0), 3.0) * max(dot(N, uSunDir) + 0.3, 0.0);
   c += uSunColor * rim * 0.14;
   gl_FragColor = vec4(applyFog(c, vWP), alpha);

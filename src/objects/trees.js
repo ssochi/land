@@ -8,14 +8,15 @@ import { colonize, branchesToMesh } from './colonize.js';
 
 export function makeOak(seed, big) {
   const R = mulberry32(seed), mb = new MB(), k = big ? 1.55 : 1;
-  const trunkH = (3.0 + R() * 1.0) * k, rx = (4.2 + R() * 0.8) * k, ry = (3.0 + R() * 0.6) * k;
+  // big trees spread into a wide, flatter crown (the umbrella oaks of Hyrule field) instead of a scaled-up ball
+  const trunkH = (3.0 + R() * 1.0) * k, rx = (4.2 + R() * 0.8) * k * (big ? 1.3 : 1), ry = (3.0 + R() * 0.6) * k * (big ? 0.82 : 1);
   const Cc = V3((R() - 0.5) * 0.6, trunkH + ry * 0.95, (R() - 0.5) * 0.6), top = Cc.y + ry;
   const lobes = Array.from({ length: 4 + Math.floor(R() * 3) }, () => { const a = R() * 6.283; return V3(Cc.x + Math.cos(a) * rx * 0.5, Cc.y + (R() - 0.3) * ry * 0.5, Cc.z + Math.sin(a) * rx * 0.5); });
   const envelope = (Rn) => { for (;;) { const p = V3((Rn() * 2 - 1) * rx, (Rn() * 2 - 1) * ry, (Rn() * 2 - 1) * rx); const e = (p.x / rx) ** 2 + (p.y / ry) ** 2 + (p.z / rx) ** 2; if (e > 1 || p.y < -ry * 0.55) continue; const q = p.add(Cc); let ok = e < 0.4; for (const L of lobes) if (q.distanceTo(L) < rx * 0.55) ok = true; if (ok) return q; } };
   const nodes = colonize(R, { trunkH, lean: V3((R() - 0.5) * 0.3, 0, (R() - 0.5) * 0.3), count: big ? 700 : 460, infl: 3.0 * k, kill: 0.85 * k, seg: 0.42 * k, iters: 90, tropism: 0.1, tipR: 0.02, pipe: 2.4, baseR: 0.5 * k, minR: 0.012, envelope });
   const sway = P => Math.pow(clamp(P.y / top, 0, 1), 1.7) * 0.5 + 0.03 * Math.hypot(P.x, P.z) / rx;
   const bark = new THREE.Color('#6a5039'), barkD = new THREE.Color('#463428');
-  branchesToMesh(mb, nodes, (t, a, P) => new THREE.Color().copy(barkD).lerp(bark, 0.35 + 0.65 * vnoise(a * 2 + seed, P.y * 1.5)), sway);
+  branchesToMesh(mb, nodes, (t, a, P) => new THREE.Color().copy(barkD).lerp(bark, 0.35 + 0.65 * vnoise(a * 2 + seed, P.y * 1.5)), sway, 0.045 * k);
   const light = new THREE.Color('#b7d35c'), midc = new THREE.Color('#6a9f3a'), dark = new THREE.Color('#2b592c');
   const hue = 0.94 + R() * 0.12; [light, midc, dark].forEach(c => c.multiplyScalar(hue));
   const colorFn = canopyColor(Cc, ry * 1.1, dark, midc, light);
@@ -26,7 +27,7 @@ export function makeOak(seed, big) {
   for (const nd of nodes) {
     if (nd.r > leafR || nd.p.y < trunkH * 0.9) continue;
     const out = nd.p.clone().sub(Cc).normalize();
-    for (let c = 0; c < 2; c++) { if (R() > 0.85) continue; addCard(mb, nd.p.clone().add(V3((R() - 0.5) * 0.6, (R() - 0.5) * 0.6, (R() - 0.5) * 0.6)), out, leafSize * (0.7 + R() * 0.6), R, colorFn, sway, Cc, 0.82, 0); }
+    for (let c = 0; c < 3; c++) { if (R() > 0.8) continue; addCard(mb, nd.p.clone().add(V3((R() - 0.5) * 0.7, (R() - 0.5) * 0.7, (R() - 0.5) * 0.7)), out, leafSize * (0.75 + R() * 0.6), R, colorFn, sway, Cc, 0.82, 0); }
   }
   return mb.geo();
 }
@@ -57,7 +58,7 @@ export function makePine(seed, lo) {
   const bark = new THREE.Color('#5d4433');
   addTube(mb, lo ? [V3(0, -0.3, 0), V3(0, H * 0.6, 0)] : [V3(0, -0.4, 0), V3(0, H * 0.35, 0), V3(0, H * 0.7, 0), V3(0, H * 0.97, 0)], lo ? [0.42, 0.16] : [0.4, 0.27, 0.16, 0.03], lo ? 4 : 7, (t, a, P) => bark.clone().multiplyScalar(0.85 + 0.3 * vnoise(a * 2, P.y * 2)), sway);
   const tiers = lo ? 7 : 10 + Math.floor(R() * 3), spikes = lo ? 7 : 11;
-  const dkA = new THREE.Color('#24452f'), dkB = new THREE.Color('#3f6a46'), tip = new THREE.Color('#7fa35c'), under = new THREE.Color('#182f23');
+  const dkA = new THREE.Color('#2a4628'), dkB = new THREE.Color('#47703c'), tip = new THREE.Color('#93b25a'), under = new THREE.Color('#1b2f1d');   // BotW conifers lean yellow-green
   for (let t = 0; t < tiers; t++) {
     const u = t / (tiers - 1), y0 = H * (0.3 + 0.7 * u) + 0.4;
     // the LOD has few tiers, so its skirts hang lower and overlap: otherwise distant pines read as floating discs
@@ -96,7 +97,7 @@ export function makePine(seed, lo) {
         const k = clamp(rad / Rr, 0, 1), col = new THREE.Color().copy(topC).lerp(tip, 0.15 + 0.5 * k).multiplyScalar(0.85 + R() * 0.2);
         const ids = [[-1, 0, 0, 0], [1, 0, 1, 0], [1, 1, 1, 1], [-1, 1, 0, 1]].map(([x, y, u, w]) => {
           const Q = base.clone().addScaledVector(ax, x * sz * 0.6).addScaledVector(out, y * sz * 1.2);
-          return mb.v(Q.x, Q.y, Q.z, nrm.x, nrm.y, nrm.z, col, sway(Q) + 0.04 * y, u * 0.5, w, 1);
+          return mb.v(Q.x, Q.y, Q.z, nrm.x, nrm.y, nrm.z, col, sway(Q) + 0.04 * y, 0.5 + u * 0.5, w, 1);   // needle half of the atlas
         });
         mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]);
       }

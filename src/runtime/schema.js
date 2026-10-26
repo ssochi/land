@@ -48,7 +48,8 @@ export const SCHEMA = {
   place:     { phase: 'objects', desc: '在指定点放一个模型（贴地）。', params: {
     kind: [STR, undefined, ''], x: [NUM, undefined, ''], z: [NUM, undefined, ''], scale: [NUM, 1, ''], rotation: [NUM, null, '弧度，缺省随机'], variant: [NUM, null, ''] } },
   grass:     { phase: 'grass', desc: '在圆形区域种草叶，中心密、边缘稀，自动避开水、陡坡和物件。', params: {
-    center: [XZ, [0, 0], ''], radius: [NUM, 80, ''], density: [NUM, 1, '密度倍率'], rules: [OBJ, {}, '同 scatter.rules'] } },
+    center: [XZ, [0, 0], ''], radius: [NUM, 80, ''], density: [NUM, 1, '密度倍率'], height: [NUM, 1, '草高倍率：1 是 0.2–0.7m 的草甸，2 左右是没膝的高草'],
+    rules: [OBJ, {}, '同 scatter.rules'] } },
   env:       { phase: 'env', desc: '环境：时刻、风、雾、雪线、配色。', params: {
     time: [NUM, 0.3, '0 清晨 · 0.5 正午 · 1 黄昏'], wind: [NUM, 0.5, '0–1'], windDir: [XZ, [0.86, -0.48], ''],
     fogDensity: [NUM, null, '覆盖时刻预设的雾'], haze: [STR, null, '雾色（十六进制），与时刻预设混合：绿地偏青绿、荒地偏暖'],
@@ -59,7 +60,8 @@ export const SCHEMA = {
     grass: [OBJ, null, '{root,mid,tipA,tipB} 十六进制'], water: [OBJ, null, '{shallow,deep}'] } },
   camera:    { phase: 'env', desc: '镜头预设。用 at/look 贴地写（eye 为离地高度），或用 pos/target 绝对坐标。第一个为默认镜头。', params: {
     name: [STR, undefined, '只用字母数字，可作 #锚点'], label: [STR, null, '显示名'], at: [XZ, null, ''], eye: [NUM, 2.5, ''],
-    look: [XZ, null, ''], lookEye: [NUM, 2, ''], pos: [ARR, null, '[x,y,z]'], target: [ARR, null, '[x,y,z]'] } },
+    look: [XZ, null, ''], lookEye: [NUM, 2, ''], pos: [ARR, null, '[x,y,z]'], target: [ARR, null, '[x,y,z]'],
+    fov: [NUM, 45, '竖直视场角，度；对照参考截图构图时用'] } },
   thermal:   { phase: 'terrain', desc: '热力侵蚀：坡度超过安息角的物质向下滑落，形成碎石坡和更敦实的山脚。建议放在水力侵蚀之后。', params: {
     grid: [STR, 'far', 'far | detail'], iterations: [NUM, 30, ''], talus: [NUM, 36, '安息角，度'], rate: [NUM, 0.5, '0–1'] } },
   apply:     { phase: 'terrain', desc: '自定义逐格函数：对每个网格点调用 fn(x, z, h)，返回新高度。用来写台地、梯田、峡谷或任何笔刷。', params: {
@@ -84,9 +86,9 @@ export const SIGS = {
   path: 'm.path(points, { width, flatten, wear })  → { length }',
   scatter: 'm.scatter(kind, { count, area, rules, scale, minSpacing, cluster, seed })  → { placed, requested, rejected, positions }',
   place: 'm.place(kind, x, z, { scale, rotation, variant })  → { x, y, z }',
-  grass: 'm.grass({ center, radius, density, rules })',
+  grass: 'm.grass({ center, radius, density, height, rules })',
   env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, snowLine, streaks, pollen, grass, water })',
-  camera: 'm.camera(name, { label, at, eye, look, lookEye } | { label, pos, target })'
+  camera: 'm.camera(name, { label, at, eye, look, lookEye, fov } | { label, pos, target, fov })'
 };
 
 // op name -> how the call is spelled in scene.js (report rows)

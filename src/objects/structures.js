@@ -77,24 +77,48 @@ function rubble(mb, R, n, spreadX, spreadZ, seed) {
   }
 }
 
-// broken wall: coursed blocks under a ragged top line that falls away toward one end
+// broken wall (4–7.5m): a continuous masonry wall whose top breaks away course by course toward one end, with a
+// plinth, pilasters, a cornice along the intact stretch and an arched window; rubble at its foot. Built from
+// 0.55m-wide columns so the broken top steps naturally; joints are painted by the prop shader (card 2).
 export function makeWall(seed) {
   const R = mulberry32(seed), mb = new MB();
-  const L = 6 + R() * 3.5, H = 2.4 + R() * 1.4, T = 0.85, ch = 0.5;
-  for (let y = 0, row = 0; y < H; y += ch, row++) {
-    let x = -L / 2 + (row % 2 ? 0.5 : 0);
-    while (x < L / 2) {
-      const bl = Math.min(0.8 + R() * 0.7, L / 2 - x), cx = x + bl / 2;
-      const u = (cx + L / 2) / L, top = H * (0.35 + 0.65 * Math.pow(1 - u, 0.6)) * (0.8 + 0.4 * vnoise(cx * 0.8 + seed, 3.1));
-      if (y + ch <= top + 0.1 && (row === 0 || R() > 0.05)) {
-        const c = V3(cx + (R() - 0.5) * 0.04, y + ch / 2, (R() - 0.5) * 0.06);
-        const isTop = y + 2 * ch > top;
-        addBox(mb, c, bl - 0.04, ch - 0.04, T - R() * 0.08, (R() - 0.5) * 0.04, stoneColor(R, y, H), isTop ? mossTop(cx, y, seed) : null);
-      }
-      x += bl;
+  const L = 8 + R() * 6, H = 4.5 + R() * 3, T = 1.0, ch = 0.55, sw = 0.55, n = Math.ceil(L / sw);
+  const stone = STONE_A.clone().lerp(STONE_B, 0.45 + R() * 0.2), keep = 0.25 + R() * 0.35;   // share of the wall still standing to full height
+  const win = H > 5.2 ? { u: -L / 2 + L * (0.18 + R() * 0.2), r: 0.75, sill: 1.5, spring: 3.0 } : null;
+  const tops = [];
+  for (let i = 0; i < n; i++) {
+    const u = (i + 0.5) / n, x = -L / 2 + u * L;
+    const fall = u < keep ? 1 : Math.pow(Math.max(0, 1 - (u - keep) / (1 - keep)), 0.8);
+    const raw = H * (0.18 + 0.82 * fall) + (vnoise(x * 0.9 + seed, 1.7) - 0.5) * 1.6 * (1 - fall * 0.7);
+    tops.push(Math.max(ch, Math.round(raw / ch) * ch));
+  }
+  const tone = y => stone.clone().multiplyScalar(0.86 + 0.14 * Math.min(1, y / 3)).lerp(MOSS, 0.3 * (1 - Math.min(1, y / 1.6)));
+  for (let i = 0; i < n; i++) {
+    const x = -L / 2 + (i + 0.5) * sw, h = tops[i], moss = mossTop(x, h, seed, 0.4);
+    const inWin = win && Math.abs(x - win.u) < win.r;
+    if (!inWin) { addBox(mb, V3(x, h / 2, 0), sw, h, T, 0, tone(h * 0.5), moss || stone, 2); continue; }
+    const arch = win.spring + Math.sqrt(Math.max(0, win.r * win.r - (x - win.u) ** 2));
+    addBox(mb, V3(x, win.sill / 2, 0), sw, win.sill, T, 0, tone(0.5), stone, 2);
+    if (h > arch + 0.3) addBox(mb, V3(x, (arch + h) / 2, 0), sw, h - arch, T, 0, tone(arch), moss || stone, 2);
+  }
+  // plinth, pilasters, cornice
+  addBox(mb, V3(0, 0.3, 0), L + 0.3, 0.7, T + 0.36, 0, tone(0).multiplyScalar(0.92), stone, 2);
+  for (let x = -L / 2 + 0.4; x < L / 2; x += 3.1) {
+    const i = Math.min(n - 1, Math.max(0, Math.floor((x + L / 2) / sw))), h = tops[i];
+    if (win && Math.abs(x - win.u) < win.r + 0.6) continue;
+    addBox(mb, V3(x, h / 2, 0), 0.8, h, T + 0.56, 0, tone(h * 0.5).multiplyScalar(0.96), mossTop(x, h, seed, 0.3) || stone, 2);
+  }
+  let run = -1;
+  for (let i = 0; i <= n; i++) {
+    const intact = i < n && tops[i] >= H - ch * 0.5;
+    if (intact && run < 0) run = i;
+    if (!intact && run >= 0) {
+      const x0 = -L / 2 + run * sw, x1 = -L / 2 + i * sw, y = Math.min(...tops.slice(run, i)) - 0.75;
+      addBox(mb, V3((x0 + x1) / 2, y, 0), x1 - x0, 0.32, T + 0.4, 0, stone.clone().multiplyScalar(1.02), stone, 2);
+      run = -1;
     }
   }
-  rubble(mb, R, 5 + Math.floor(R() * 4), L * 1.1, 4, seed);
+  rubble(mb, R, 8 + Math.floor(R() * 6), L * 1.2, 5, seed);
   const g = mb.geo(); g.userData.colliders = [];
   for (let x = -L / 2 + 0.4; x < L / 2; x += 0.8) g.userData.colliders.push([x, 0, 0.75]);
   return g;

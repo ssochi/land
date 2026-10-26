@@ -39,7 +39,8 @@ void main(){ vec2 d = (uSun - vUv) / 40.0, uv = vUv; float illum = 1.0, sum = 0.
   // uGlare: sun colour x strength x facing; the veil is scaled by how much sky is visible right at the sun
   const comp = M(`uniform sampler2D tScene; uniform sampler2D tBloom; uniform sampler2D tRays; uniform vec3 uRay; uniform float uBloom;
 uniform vec3 uGlare; uniform vec2 uSunUV; uniform float uAspect; varying vec2 vUv;
-vec3 shoulder(vec3 c){ vec3 k = 0.8 + 0.2 * (1.0 - exp(-(c - 0.8) / 0.2)); return mix(c, k, step(0.8, c)); }
+// soft highlight roll-off from 0.7: skies and sunlit tops keep their colour instead of clipping to white
+vec3 shoulder(vec3 c){ vec3 k = 0.7 + 0.3 * (1.0 - exp(-(c - 0.7) / 0.3)); return mix(c, k, step(0.7, c)); }
 void main(){
   vec3 c = texture2D(tScene, vUv).rgb + texture2D(tBloom, vUv).rgb * uBloom + texture2D(tRays, vUv).rgb * uRay;
   if (uGlare.r + uGlare.g + uGlare.b > 0.001) {

@@ -63,7 +63,7 @@ void main(){
   if (vis < 0.02) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
   float widen = min(inversesqrt(keep), 18.0), clump = grassClump(xz);
   // distant blades become short wide tufts rather than long hairs on the skyline
-  float h = (F.z * (0.5 + 0.95 * clump) + h2.y * 0.18) * (0.25 + 0.75 * vis) * mix(1.0, 0.62, smoothstep(2.0, 12.0, widen));
+  float h = F.z * (0.5 + 0.95 * clump + h2.y * 0.4) * (0.25 + 0.75 * vis) * mix(1.0, 0.62, smoothstep(2.0, 12.0, widen));
   float ang = h2.x * 6.2831, w = 0.04 * (0.75 + 0.5 * h2.z) * widen * vis, rnd = h2.w;
   float tt0 = position.y;
   vec3 side = vec3(cos(ang), 0.0, sin(ang)), face = vec3(-side.z, 0.0, side.x);
@@ -91,8 +91,10 @@ void main(){
   col = mix(col, mix(body, tip, 0.75), smoothstep(0.62, 1.0, vT)) * (0.96 + vRand * 0.08);
   vec3 lit = lighting(col, normalize(vN), vWP, 0.2) * mix(0.86, 1.0, smoothstep(0.0, 0.5, vT));
   lit *= 1.0 - vOcc * 0.3;
+  lit += col * uSkyAmb * 0.35 * (1.0 - gShadow) * (0.4 + 0.6 * vT);   // thin blades in shadow still pass skylight
   vec3 V = normalize(vWP - cameraPosition);
-  lit += uSunColor * tip * pow(max(dot(V, uSunDir), 0.0), 3.0) * vT * 0.45 * gShadow;
+  // backlit blades glow: light through the leaf, strongest toward the tips and when looking into the sun
+  lit += uSunColor * mix(tip, vec3(0.75, 0.9, 0.35), 0.35) * pow(max(dot(V, uSunDir), 0.0), 1.6) * vT * (0.5 + 0.6 * (1.0 - uSunDir.y)) * gShadow;
   lit += vec3(0.21, 0.23, 0.12) * vGust * smoothstep(0.45, 1.0, vT) * gShadow;
   gl_FragColor = vec4(applyFog(lit, vWP), 1.0);
 }`, {

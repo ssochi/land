@@ -1,12 +1,13 @@
 // Time of day: interpolates sun direction/color, sky, fog and ambient between dawn, noon and dusk keys.
+// Low sun stays golden rather than orange, with enough sky fill that greens stay green at dusk (as in BotW).
 import * as THREE from 'three';
 import { U } from './uniforms.js';
 import { HZ_DIRS } from './horizon.js';
 
 const KEYS = [
   { elev: 0.14, az: -1.5, sun: [1.0, 0.74, 0.5], si: 1.12, zen: '#6a87c2', fog: '#efcfae', sky: [0.38, 0.40, 0.52], gnd: [0.25, 0.22, 0.18], fd: 0.0034 },
-  { elev: 0.95, az: -0.55, sun: [1.0, 0.95, 0.84], si: 1.1, zen: '#2c74cf', fog: '#c2dbe4', sky: [0.34, 0.43, 0.56], gnd: [0.24, 0.26, 0.19], fd: 0.0026 },
-  { elev: 0.21, az: 0.55, sun: [1.0, 0.56, 0.3], si: 1.18, zen: '#3d4f8e', fog: '#eea57c', sky: [0.36, 0.33, 0.46], gnd: [0.28, 0.20, 0.16], fd: 0.0032 }
+  { elev: 0.95, az: -0.55, sun: [1.0, 0.95, 0.84], si: 1.1, zen: '#4f8bc8', fog: '#c6dee6', sky: [0.34, 0.43, 0.56], gnd: [0.24, 0.26, 0.19], fd: 0.0026 },
+  { elev: 0.21, az: 0.55, sun: [1.0, 0.7, 0.45], si: 1.2, zen: '#52639a', fog: '#e9b78f', sky: [0.4, 0.4, 0.47], gnd: [0.28, 0.25, 0.18], fd: 0.0028 }
 ];
 
 // fogOverride: m.env({ fogDensity }) or null; fogBase: the density the frame loop applies;

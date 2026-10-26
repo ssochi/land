@@ -22,7 +22,7 @@ void main(){
     float toward = fbm5((uv + uSunDir.xz * 0.35) * 0.5) * 0.72 + detail * 0.28;
     float lit = smoothstep(0.2, 0.8, clamp(0.6 + (raw - toward) * 6.0, 0.0, 1.0));
     vec3 shade = mix(mix(uZenith, uFogColor, 0.6) * 0.86 + 0.1, uFogColor, smoothstep(0.25, 0.0, e) * 0.5);
-    vec3 cc = mix(shade, mix(vec3(1.0), uSunColor, 0.3) * 1.08, lit);
+    vec3 cc = mix(shade, mix(vec3(1.0), uSunColor, 0.3) * 0.98, lit);
     cc += uSunColor * pow(sd, 8.0) * 0.5 * (1.0 - smoothstep(th, th + 0.25, raw));
     col = mix(col, cc, cov * 0.97);
   }

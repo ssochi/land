@@ -63,7 +63,7 @@ export function distributeGrass(densityScale) {
       const d = densityScale * p.density * (46 + (12 - 46) * smooth(4, rad, rc)) * (0.72 + 0.56 * patch) * edgeW * free[k];   // blades per m²
       if (d <= 0) continue;
       const tallN = vnoise(x * 0.09 - 3, z * 0.09 + 8);
-      const h = (0.32 + tallN * 0.42) * (1 + Math.hypot(x, z) * 0.003) * (0.45 + 0.55 * edgeW);
+      const h = (0.24 + tallN * 0.34) * p.height * (0.45 + 0.55 * edgeW);   // metres before per-blade and tuft variation
       tall[k] = dens[k] > 0 ? (tall[k] * dens[k] + h * d) / (dens[k] + d) : h;
       dens[k] += d;
       count += d * st * st;

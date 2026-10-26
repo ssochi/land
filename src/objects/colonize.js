@@ -36,8 +36,9 @@ export function colonize(R, o) {
   return nodes;
 }
 
-// walk the node tree into chains (runs of single-child nodes) and sweep a tube along each
-export function branchesToMesh(mb, nodes, barkCol, sway) {
+// walk the node tree into chains (runs of single-child nodes) and sweep a tube along each; chains thinner than
+// minR are left out (inside a dense canopy they would only poke through the leaves as bare sticks)
+export function branchesToMesh(mb, nodes, barkCol, sway, minR = 0.011) {
   const stack = [[0, -1]];
   while (stack.length) {
     const [start, from] = stack.pop(), pts = [], rad = [];
@@ -46,7 +47,7 @@ export function branchesToMesh(mb, nodes, barkCol, sway) {
     let cur = start;
     for (;;) { pts.push(nodes[cur].p); rad.push(nodes[cur].r); if (nodes[cur].ch.length === 1) cur = nodes[cur].ch[0]; else break; }
     const rmax = Math.max(...rad);
-    if (pts.length >= 2 && rmax > 0.011) addTube(mb, pts, rad, rmax > 0.18 ? 9 : rmax > 0.07 ? 6 : 4, barkCol, sway);
+    if (pts.length >= 2 && rmax > minR) addTube(mb, pts, rad, rmax > 0.18 ? 9 : rmax > 0.07 ? 6 : 4, barkCol, sway);
     for (const c of nodes[cur].ch) stack.push([c, cur]);
   }
 }
