@@ -15,7 +15,8 @@ objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures 
   ↓
 runtime   参数 schema 与校验、scene.js 拿到的 `m` 对象（api.js）、不含渲染的世界生成流程（generate.js）。
   ↓
-render    three.js：共享 uniform、通用 GLSL、各类材质与网格构建、阴影、湖面反射、地平线图、后期、风痕、飞絮、时刻。
+render    three.js：共享 uniform、通用 GLSL、材质贴图烘焙（texgen.js：岩石 / 草地地面 / 土路的反照率、法线、凹陷遮蔽）、
+          各类材质与网格构建、阴影、湖面反射、地平线图、后期、风痕、飞絮、时刻。
   ↓
 app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称（walker.js 纯物理，first-person.js 键鼠 / 触屏输入）、DOM 界面、window.mapEditor。
 ```

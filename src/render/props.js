@@ -10,6 +10,9 @@ import { SHADOW, REFLECT } from './layers.js';
 
 // 1 when the scene target is multisampled (set by src/render/post.js): leaf cards then use alpha to coverage
 export const A2C = { value: 0 };
+// baked rock texture (src/render/texgen.js) for textured stone; set by setPropTextures()
+const ROCK_A = { value: null }, ROCK_N = { value: null };
+export function setPropTextures(t) { ROCK_A.value = t.rock.albedo; ROCK_N.value = t.rock.normal; }
 
 const propMat = (o) => mat(`
 attribute vec3 aColor; attribute float aSway; attribute vec2 aUV; attribute float aCard;
@@ -30,7 +33,7 @@ void main(){
   vWP = w.xyz; vN = normalize(mat3(m) * normal); vC = aColor;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`, `
-uniform float uSharp; uniform float uTrans; uniform sampler2D uLeaf; uniform float uA2C;
+uniform float uSharp; uniform float uTrans; uniform sampler2D uLeaf; uniform float uA2C; uniform sampler2D uRockA, uRockN;
 varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH;
 void main(){
   vec3 alb = vC; float alpha = 1.0;
@@ -47,7 +50,17 @@ void main(){
     alb *= 0.74 + 0.4 * lt.r;
   }
   vec3 N = normalize(vN); if (!gl_FrontFacing && !card) N = -N;
-  if (vCard > 1.5) {
+  if (vCard > 2.5) {
+    // textured stone (boulders, outcrops): the baked rock texture and normal map, triplanar in world space
+    vec3 tw = pow(abs(N), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
+    vec3 P = vSP / 2.6;
+    vec4 ax = texture2D(uRockN, P.zy), ay = texture2D(uRockN, P.xz), az = texture2D(uRockN, P.xy);
+    vec3 tx = ax.xyz * 2.0 - 1.0, ty = ay.xyz * 2.0 - 1.0, tz = az.xyz * 2.0 - 1.0;
+    tx = vec3(tx.xy + N.zy, abs(tx.z) * N.x); ty = vec3(ty.xy + N.xz, abs(ty.z) * N.y); tz = vec3(tz.xy + N.xy, abs(tz.z) * N.z);
+    N = normalize(tx.zyx * tw.x + ty.xzy * tw.y + tz.xyz * tw.z);
+    vec3 ta = texture2D(uRockA, P.zy).rgb * tw.x + texture2D(uRockA, P.xz).rgb * tw.y + texture2D(uRockA, P.xy).rgb * tw.z;
+    alb *= ta / 0.76 * mix(0.6, 1.05, ax.w * tw.x + ay.w * tw.y + az.w * tw.z);
+  } else if (vCard > 1.5) {
     // masonry: courses 0.55m high in world y, blocks ~1.1m along the face, staggered per course, each with its
     // own tone; joints and tones are filtered by the pixel footprint and fade to their average with distance
     vec2 tg = vec2(-N.z, N.x); tg /= max(length(tg), 1e-3);
@@ -60,11 +73,16 @@ void main(){
     float joint = mix(0.14, max(ju, jv), detail) * (1.0 - step(0.9, abs(N.y)));   // flat tops have no courses
     float bh = hash12(vec2(col, row) + 0.37);
     float streak = vnoise(vec2(dot(vSP.xz, tg) * 1.7, vSP.y * 0.06));   // rain streaks down the face
-    alb *= mix(1.0, (0.86 + 0.28 * bh) * (0.9 + 0.16 * streak), detail) * (1.0 - 0.42 * joint);
-    // ivy: patches of leaves creeping up the walls from the ground, ragged at their upper edge
+    // stone grain inside the blocks: the baked rock texture on continuous uvs (a per-block offset would break
+    // the uv derivatives at every joint and pick a tiny mip there, drawing bright seams)
+    vec4 sg = texture2D(uRockA, vec2(dot(vSP.xz, tg), vSP.y) / 1.5);
+    alb *= mix(vec3(1.0), (0.86 + 0.28 * bh) * (0.9 + 0.16 * streak) * mix(vec3(1.0), sg.rgb / 0.76, 0.6), detail) * (1.0 - 0.3 * joint);
+    // ivy: leafy patches creeping up from the ground; the leaf atlas gives their edges a foliage silhouette
     float along = dot(vSP.xz, tg), iv = vnoise(vec2(along * 0.45, vSP.y * 0.22) + 3.7) * 0.65 + vnoise(vec2(along * 1.6, vSP.y * 0.9)) * 0.35;
-    float ivy = smoothstep(0.56, 0.6, iv) * (1.0 - smoothstep(1.0, 5.5, vH - (iv - 0.5) * 6.0)) * (1.0 - step(0.9, abs(N.y)));
-    vec3 leaf = mix(vec3(0.17, 0.3, 0.12), vec3(0.42, 0.56, 0.2), vnoise(vSP.xz * 3.1 + vSP.y * 2.7) * mix(0.5, 1.0, detail));
+    vec4 lf = texture2D(uLeaf, vec2(along, vSP.y) * vec2(0.28, 0.28) * vec2(0.5, 1.0));
+    float reach = 1.0 - smoothstep(1.0, 5.5, vH - (iv - 0.5) * 6.0);
+    float ivy = smoothstep(0.5, 0.56, iv * 0.75 + lf.a * 0.35) * reach * (1.0 - step(0.9, abs(N.y)));
+    vec3 leaf = mix(vec3(0.16, 0.28, 0.11), vec3(0.42, 0.56, 0.2), lf.r * mix(0.5, 1.0, detail));
     alb = mix(alb, leaf, ivy);
   }
   vec3 c = lighting(alb, N, vSP, uSharp);
@@ -74,7 +92,7 @@ void main(){
   float rim = pow(1.0 - max(dot(N, -V), 0.0), 3.0) * max(dot(N, uSunDir) + 0.3, 0.0);
   c += uSunColor * rim * 0.14;
   gl_FragColor = vec4(applyFog(c, vWP), alpha);
-}`, { uSwayAmp: { value: o.amp }, uSwayFreq: { value: o.freq }, uSharp: { value: o.sharp }, uTrans: { value: o.trans }, uLeaf: { value: LEAF_TEX }, uA2C: A2C },
+}`, { uSwayAmp: { value: o.amp }, uSwayFreq: { value: o.freq }, uSharp: { value: o.sharp }, uTrans: { value: o.trans }, uLeaf: { value: LEAF_TEX }, uA2C: A2C, uRockA: ROCK_A, uRockN: ROCK_N },
   { side: o.double ? THREE.DoubleSide : THREE.FrontSide, alphaToCoverage: !!o.double, extensions: { derivatives: true } });
 
 // keyed by KINDS[kind].mat

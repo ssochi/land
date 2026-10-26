@@ -20,31 +20,21 @@ void main(){
   gl_Position = projectionMatrix * viewMatrix * w;
 }`, `
 uniform vec3 uRoot, uMid, uTipA, uTipB, uSand; uniform float uSnowLine;
+uniform sampler2D uRockA, uRockN, uSwardA, uSwardN, uDirtA, uDirtN;   // baked by src/render/texgen.js
 varying vec3 vWP; varying vec3 vN; varying float vWear; varying float vShore; varying float vDepth; varying float vCover; varying float vOcc; varying float vForest; varying float vFlowN; varying float vPath;
 ${GRASS_TONE}
-// triplanar value noise and gradient: world-space detail that does not stretch down cliff faces
+// triplanar value noise: world-space detail that does not stretch down cliff faces
 float triN(vec3 p, vec3 w) { return vnoise(p.zy) * w.x + vnoise(p.xz) * w.y + vnoise(p.xy) * w.z; }
-vec3 triG(vec3 p, vec3 w) {
-  vec3 a = vnoiseD(p.zy), b = vnoiseD(p.xz), c = vnoiseD(p.xy);
-  return vec3(0.0, a.z, a.y) * w.x + vec3(b.y, 0.0, b.z) * w.y + vec3(c.y, c.z, 0.0) * w.z;
-}
-// cellular noise on one projection plane: (F1, F2 - F1, cell hash) — rock facets and the cracks between them
-vec3 cell2(vec2 p) {
-  vec2 i = floor(p), f = fract(p); float d1 = 8.0, d2 = 8.0; vec2 id = vec2(0.0);
-  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-    vec2 g = vec2(float(x), float(y)), r = g + vec2(hash12(i + g), hash12(i + g + 19.7)) - f; float d = dot(r, r);
-    if (d < d1) { d2 = d1; d1 = d; id = i + g; } else if (d < d2) d2 = d;
-  }
-  return vec3(sqrt(d1), sqrt(d2) - sqrt(d1), hash12(id + 3.1));
-}
-// triplanar chunky facets: each cell tilts the normal a random way; returns (normal offset, crack, facet shade)
-vec3 facetN(vec3 p, vec3 w, out float crack, out float shade) {
-  // cells on vertical planes are stretched upward: columnar blocks rather than paving stones
-  vec3 a = cell2(p.zy * vec2(1.0, 0.4)), b = cell2(p.xz + 11.0), c = cell2(p.xy * vec2(1.0, 0.4) + 23.0);
-  crack = (1.0 - smoothstep(0.0, 0.04, a.y)) * w.x + (1.0 - smoothstep(0.0, 0.04, b.y)) * w.y + (1.0 - smoothstep(0.0, 0.04, c.y)) * w.z;
-  shade = a.z * w.x + b.z * w.y + c.z * w.z;
-  float ta = a.z * 6.283, tb = b.z * 6.283, tc = c.z * 6.283;
-  return vec3(0.0, sin(ta), cos(ta)) * w.x + vec3(cos(tb), 0.0, sin(tb)) * w.y + vec3(sin(tc), cos(tc), 0.0) * w.z;
+// triplanar texture sample (planes zy, xz, xy at scale s)
+vec4 triT(sampler2D t, vec3 p, vec3 w, float s) { return texture2D(t, p.zy * s) * w.x + texture2D(t, p.xz * s) * w.y + texture2D(t, p.xy * s) * w.z; }
+// triplanar normal map with whiteout blending (Golus); cavity from the map alpha comes back in cav
+vec3 triNormal(sampler2D t, vec3 p, vec3 n, vec3 w, float s, float k, out float cav) {
+  vec4 ax = texture2D(t, p.zy * s), ay = texture2D(t, p.xz * s), az = texture2D(t, p.xy * s);
+  vec3 tx = ax.xyz * 2.0 - 1.0, ty = ay.xyz * 2.0 - 1.0, tz = az.xyz * 2.0 - 1.0;
+  tx.xy *= k; ty.xy *= k; tz.xy *= k;
+  tx = vec3(tx.xy + n.zy, abs(tx.z) * n.x); ty = vec3(ty.xy + n.xz, abs(ty.z) * n.y); tz = vec3(tz.xy + n.xy, abs(tz.z) * n.z);
+  cav = ax.w * w.x + ay.w * w.y + az.w * w.z;
+  return normalize(tx.zyx * w.x + ty.xzy * w.y + tz.xyz * w.z);
 }
 void main(){
   vec3 Ng = normalize(vN), N = Ng; float slope = 1.0 - Ng.y;
@@ -63,18 +53,24 @@ void main(){
   float clump = mix(0.5, grassClump(vWP.xz), tuftK);
   float tuft = mix(0.5, vnoise(vWP.xz * 0.21 + 9.0), 1.0 - smoothstep(2.0, 6.0, px));
   float mottle = 0.78 + 0.3 * clump + 0.14 * tuft + 0.12 * fbm(vWP.xz * 0.022 + 4.0);
-  vec3 meadow = mix(gMid, gTip, 0.36) * 0.86 * mottle;
+  // painted sward (baked strokes) at two scales: brightness and how far toward the bleached tip colour
+  vec4 sw1 = texture2D(uSwardA, vWP.xz / 1.7), sw2 = texture2D(uSwardA, vWP.xz / 6.3 + 0.37);
+  float swB = mix(sw1.r, sw2.r, 0.4) / 0.8, swT = mix(sw1.g, sw2.g, 0.4);
+  vec3 meadow = mix(gMid, gTip, clamp(0.22 + swT * 0.55, 0.0, 1.0)) * 0.86 * mottle * mix(1.0, swB, 0.55);
   meadow = mix(meadow, vec3(0.6, 0.62, 0.34), smoothstep(45.0, 130.0, alt + n1 * 25.0) * 0.45);
   meadow = mix(meadow, vec3(0.42, 0.55, 0.3), smoothstep(110.0, 170.0, alt) * 0.5);
   meadow = mix(meadow, vec3(0.24, 0.44, 0.25), wet * 0.45);
   // up close under the blades: the stems' shaded mid tone, so gaps have depth without reading as dark holes
-  vec3 sward = mix(gMid, gTip, 0.15) * 0.8 * mottle;
+  vec3 sward = mix(gMid, gTip, 0.15 + swT * 0.3) * 0.8 * mottle * mix(1.0, swB, 0.5);
   vec3 base = mix(meadow, sward, clamp(vCover, 0.0, 1.0) * (1.0 - smoothstep(5.0, 30.0, dist)) * 0.95);
+  float cavS; vec3 Ns = triNormal(uSwardN, vWP, N, vec3(0.0, 1.0, 0.0), 1.0 / 1.7, 0.6, cavS);
+  N = normalize(mix(N, Ns, (1.0 - slope) * tuftK));
   // worn track: packed earth with grit, a ragged grassy edge and a slightly lighter centre
   float worn = smoothstep(0.3, 0.7, vPath + (vnoise(vWP.xz * 0.9) - 0.5) * 0.45);
-  vec3 dirt = mix(vec3(0.5, 0.42, 0.31), vec3(0.66, 0.57, 0.43), vnoise(vWP.xz * 0.35) * 0.6 + smoothstep(0.7, 1.0, vPath) * 0.4);
-  dirt *= 0.9 + 0.2 * step(0.82, vnoise(vWP.xz * 4.1));
-  base = mix(base, dirt, worn);
+  vec3 dirt = texture2D(uDirtA, vWP.xz / 3.2).rgb * (0.92 + 0.16 * vnoise(vWP.xz * 0.35)) * mix(1.0, 1.08, smoothstep(0.7, 1.0, vPath));
+  float cavD; vec3 Nd = triNormal(uDirtN, vWP, N, vec3(0.0, 1.0, 0.0), 1.0 / 3.2, 1.0, cavD);
+  dirt *= mix(0.7, 1.0, cavD);
+  base = mix(base, dirt, worn); N = normalize(mix(N, Nd, worn));
   float wear = clamp(vWear, -2.0, 3.0);
   // rock: chunky facets with dark cracks, irregular warped strata, vertical weathering streaks, warm grey-beige
   // stone with lichen; strata widen with distance so they do not alias
@@ -83,21 +79,24 @@ void main(){
   rockAmt = max(rockAmt, alpine * 0.62);
   vec3 rock = vec3(0.0);
   if (rockAmt > 0.01) {
-    float bandH = mix(3.2, 10.0, smoothstep(150.0, 700.0, dist)) * (0.75 + 0.5 * triN(vWP * 0.02 + 5.0, tw));
-    float bf = fract((alt + triN(vWP * 0.03, tw) * 2.0 + triN(vWP * 0.008 + 3.0, tw) * 14.0) / bandH);
-    float ledge = smoothstep(0.0, 0.3, bf) * (1.0 - smoothstep(0.9, 1.0, bf));
+    // rock: the baked fractured-slab texture (src/render/texgen.js) sampled triplanar at two scales so it never
+    // visibly repeats; its normal map is the relief, its cavity term darkens cracks. Tinted per region: warm
+    // pink-grey stone with cooler grey and ochre patches, lichen on ledges, faint broad bedding and streaks.
+    float c1, c2;
+    // 8m tile for fractures you see up close, 38m tile for the big slabs and crevices that shape a whole cliff
+    vec3 n1 = triNormal(uRockN, vWP, Ng, tw, 1.0 / 8.0, 0.8, c1), n2 = triNormal(uRockN, vWP + 11.0, Ng, tw, 1.0 / 38.0, 1.6, c2);
+    vec3 Nrock = normalize(n1 + n2 - Ng);
+    vec3 alb = triT(uRockA, vWP, tw, 1.0 / 8.0).rgb * 0.5 + triT(uRockA, vWP + 11.0, tw, 1.0 / 38.0).rgb * 0.5;
+    vec3 tint = mix(vec3(0.95, 0.8, 0.7), vec3(1.05, 0.93, 0.83), triN(vWP * 0.03 + 4.0, tw));
+    tint = mix(tint, vec3(0.8, 0.8, 0.78), smoothstep(0.55, 0.75, triN(vWP * 0.012 + 8.0, tw)) * 0.5);
+    tint = mix(tint, vec3(0.95, 0.78, 0.55), smoothstep(0.6, 0.8, triN(vWP * 0.02 + 2.0, tw)) * 0.3);
+    rock = alb * tint;
+    rock = mix(rock, vec3(0.42, 0.47, 0.3), smoothstep(0.55, 0.8, triN(vWP * 0.07 + 2.0, tw)) * smoothstep(0.25, 0.75, Nrock.y) * 0.6);
+    float bed = sin((alt + triN(vWP * 0.01, tw) * 18.0) * 0.55) * 0.5 + 0.5;
     vec2 th = vec2(-Ng.z, Ng.x); float thl = length(th);
     float along = thl > 0.05 ? dot(vWP.xz, th / thl) : vWP.x;
     float streak = vnoise(vec2(along * 0.45, alt * 0.03)) * 0.6 + vnoise(vec2(along * 1.3, alt * 0.08 + 3.0)) * 0.4;
-    float crack, fshade;
-    vec3 fN = facetN(vWP * mix(0.2, 0.06, smoothstep(60.0, 400.0, dist)), tw, crack, fshade);
-    float rn = triN(vWP * 0.16, tw) * 0.55 + triN(vWP * 0.55 + 9.0, tw) * 0.25 + triN(vWP * 0.04, tw) * 0.2;
-    rock = mix(vec3(0.6, 0.5, 0.43), vec3(0.84, 0.72, 0.6), rn * 0.45 + fshade * 0.55);
-    rock = mix(rock, vec3(0.38, 0.4, 0.3), smoothstep(0.55, 0.8, triN(vWP * 0.07 + 2.0, tw)) * 0.35);
-    rock *= mix(0.93, 1.02, ledge) * (0.88 + 0.16 * streak) * (1.0 - crack * 0.16 * near) * (1.0 - clamp(wear * 0.1, 0.0, 0.25));
-    // chiselled normals: facet tilt + fine triplanar bump + ledge tilt (ledge tops lean toward the sky)
-    vec3 gR = triG(vWP * 0.7 + 5.0, tw) * 0.4; gR -= Ng * dot(gR, Ng); fN -= Ng * dot(fN, Ng);
-    vec3 Nrock = normalize(Ng + fN * 0.6 * near - gR * 0.5 * near + vec3(0.0, (ledge - 0.5) * 0.5 * near, 0.0));
+    rock *= mix(0.72, 1.05, c1) * mix(0.45, 1.1, c2) * (0.96 + 0.06 * bed) * (0.9 + 0.14 * streak) * (1.0 - clamp(wear * 0.1, 0.0, 0.25));
     N = normalize(mix(N, Nrock, rockAmt));
   }
   base = mix(base, rock, rockAmt);
@@ -120,8 +119,15 @@ void main(){
     gl_FragColor = vec4(c, 1.0); return;
   }
   gl_FragColor = vec4(applyFog(c, vWP), 1.0);
-}`, { uRoot: { value: PAL.root }, uMid: { value: PAL.mid }, uTipA: { value: PAL.tipA }, uTipB: { value: PAL.tipB }, uSand: { value: PAL.sand }, uSnowLine: { value: 170 } },
+}`, { uRoot: { value: PAL.root }, uMid: { value: PAL.mid }, uTipA: { value: PAL.tipA }, uTipB: { value: PAL.tipB }, uSand: { value: PAL.sand }, uSnowLine: { value: 170 },
+  uRockA: { value: null }, uRockN: { value: null }, uSwardA: { value: null }, uSwardN: { value: null }, uDirtA: { value: null }, uDirtN: { value: null } },
   { extensions: { derivatives: true } });
+
+// baked textures from src/render/texgen.js bakeTextures()
+export function setTerrainTextures(t) {
+  const u = terrainMat.uniforms;
+  u.uRockA.value = t.rock.albedo; u.uRockN.value = t.rock.normal; u.uSwardA.value = t.sward.albedo; u.uSwardN.value = t.sward.normal; u.uDirtA.value = t.dirt.albedo; u.uDirtN.value = t.dirt.normal;
+}
 
 // the FAR mesh shares uniforms but is pushed back in depth so DETAIL wins where they overlap
 const farTerrainMat = terrainMat.clone();

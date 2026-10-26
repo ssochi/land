@@ -12,7 +12,7 @@ export function cragOffset(G, x, y, z, g) {
   const steep = smooth(0.7, 1.6, g);
   if (steep <= 0) return null;
   const din = Math.min(x - DETAIL.min, DETAIL.min + DETAIL.size - x, z - DETAIL.min, DETAIL.min + DETAIL.size - z);
-  const amp = G === DETAIL ? 1.8 : 3.4, f = G === DETAIL ? 0.1 : 0.05, a = amp * steep * smooth(6, 24, Math.abs(din));
+  const amp = G === DETAIL ? 3.0 : 3.4, f = G === DETAIL ? 0.07 : 0.05, a = amp * steep * smooth(6, 24, Math.abs(din));   // buttresses and recesses
   if (a <= 0) return null;
   return { o: (vnoise3(x * f, y * f, z * f) - 0.5) * 2 * a, dy: (vnoise3(x * f + 7.1, y * f, z * f - 3.3) - 0.5) * a * 0.6 };
 }

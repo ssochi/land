@@ -12,11 +12,12 @@ import { newSession, resetWorld, runScript, settleWater, terrainSummary } from '
 import { U, PAL } from '../render/uniforms.js';
 import { computeHorizon } from '../render/horizon.js';
 import { createSky } from '../render/sky.js';
-import { terrainMat, buildTerrainMeshes } from '../render/terrain-mesh.js';
+import { terrainMat, buildTerrainMeshes, setTerrainTextures } from '../render/terrain-mesh.js';
 import { buildWaterMeshes, MIST_PX } from '../render/water-mesh.js';
 import { createReflection } from '../render/reflection.js';
-import { buildInstances } from '../render/props.js';
+import { buildInstances, setPropTextures } from '../render/props.js';
 import { createGrass } from '../render/grass.js';
+import { bakeTextures } from '../render/texgen.js';
 import { createStreaks } from '../render/wind-streaks.js';
 import { createPollen } from '../render/pollen.js';
 import { atmosphere, applyTOD, todLabel } from '../render/time-of-day.js';
@@ -41,10 +42,12 @@ export function createEditor(renderer, canvas) {
   const post = createPost(renderer, scene, camera);
   const reflection = createReflection(renderer, scene, camera);
   const grass = createGrass(scene);
+  const textures = bakeTextures(renderer);
+  setTerrainTextures(textures); setPropTextures(textures);
   MIST_PX.value = renderer.getDrawingBufferSize(new THREE.Vector2()).y;
   const pointer = createPointerPush(canvas, camera);
 
-  const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls, renderer, mode: 'orbit' };
+  const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls, renderer, mode: 'orbit', textures };
   let worldGroup = null;
 
   // ── first person ─────────────────────────────────────
