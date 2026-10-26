@@ -1,0 +1,12 @@
+{
+  "name": "land",
+  "private": true,
+  "description": "面向 agent 的 three.js 场景引擎：用 scene.js 代码生成地形、水体、植被并渲染风格化原野",
+  "scripts": {
+    "bundle": "python3 tools/agent_render.py engine.html scene.js --bundle index.html",
+    "render": "python3 tools/agent_render.py engine.html scene.js out"
+  },
+  "devDependencies": {
+    "three": "0.147.0"
+  }
+}
