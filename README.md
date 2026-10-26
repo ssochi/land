@@ -49,6 +49,30 @@ npm run build    # 生成 dist/index.html：单文件、离线可用，可以直
 - 底部栏切换镜头，调节时刻和风力。
 - 右上角「构建报告」里有每次调用的执行记录、调试视图（坡度、等高、侵蚀、离水距离、汇流），以及完整的脚本 API 参考。
 
+## 第一人称漫游
+
+点底部栏的「第一人称」或按 `V`，就能以玩家视角走进地图：
+
+| 操作 | 键位 |
+| --- | --- |
+| 移动 | `WASD` / 方向键，鼠标转视角（点击画面锁定鼠标，`Esc` 释放） |
+| 冲刺 | 按住 `Shift` |
+| 跳跃 | `空格`（约 1.2 m，可以跳上矮坎） |
+| 飞行 | `F` 或双击 `空格` 切换；飞行时 `空格` 上升、`C` 下降，`Shift` 疾飞；飞到地面自动落地 |
+| 退出 | `V`，或点任意镜头 |
+
+走路会被陡坡（约 49° 以上）挡住，树、石头、遗迹和塔都有碰撞；走进深水会浮起来游泳。从高空镜头进入时直接处于飞行状态。手机上是左下摇杆加跳、飞、冲刺、下降按钮，拖动画面转视角。
+
+agent 也可以用脚本走一遍再截图，例如：
+
+```js
+mapEditor.walk({ x: -56, z: 70, yaw: 0 });     // 站到南边草甸上，面朝北
+mapEditor.input({ forward: 1, sprint: true });  // 按住 W + Shift
+mapEditor.step(3);                              // 推进 3 秒（固定步长，结果可复现）
+mapEditor.player();                             // { x, y, z, speed, grounded, flying, swimming, … }
+mapEditor.snapshot();
+```
+
 ## 场景脚本
 
 ```js
@@ -122,7 +146,7 @@ node tools/render.mjs --page dist/index.html
 
 输出目录（默认 `out/`）里有每个镜头的 PNG 和 `report.json`。构建出错时进程以非零状态退出。
 
-页面加载后，`window.mapEditor` 提供 `run(fn)` 重建、`report()`、各种查询、`camera()`、`view()`、`pause()` / `step()` / `snapshot()` 等接口，供控制台或无头浏览器使用；`mapEditor.debug` 暴露 three.js 的 renderer、scene、camera 和共享 uniform，方便排查渲染问题。
+页面加载后，`window.mapEditor` 提供 `run(fn)` 重建、`report()`、各种查询、`camera()`、`view()`、`walk()` / `input()` / `player()`（第一人称）、`pause()` / `step()` / `snapshot()` 等接口，供控制台或无头浏览器使用；`mapEditor.debug` 暴露 three.js 的 renderer、scene、camera 和共享 uniform，方便排查渲染问题。
 
 ## 开发
 
@@ -150,7 +174,7 @@ src/
   objects/          模型库（树、花、石）、散布与放置、草叶分布
   runtime/          脚本 API、参数 schema、世界生成流程
   render/           three.js 材质与着色器、阴影、地平线图、后期、风痕、时刻
-  app/              编辑器编排、镜头、界面、window.mapEditor
+  app/              编辑器编排、镜头、第一人称（walker.js 物理 + first-person.js 输入）、界面、window.mapEditor
   styles/           页面样式
 tools/
   build.mjs         打包单文件

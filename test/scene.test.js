@@ -17,7 +17,7 @@ test('example scene builds cleanly and reproduces the reference world', async ()
   assert.deepEqual(report.counts, {
     tower: 1, 'ruin.wall': 2, 'ruin.arch': 1, 'ruin.pillar': 4, 'tree.oak': 27, 'tree.big': 1, 'tree.birch': 17, 'tree.pine': 9180, bush: 80,
     fern: 380, 'plant.broadleaf': 140, reed: 160, 'rock.boulder': 33, 'rock.pebble': 170, 'rock.cliff': 55,
-    'flower.daisy': 6500, 'flower.buttercup': 4200, 'flower.poppy': 900, 'flower.lupine': 1600, grassBlades: 472860
+    'flower.daisy': 6500, 'flower.buttercup': 4200, 'flower.poppy': 900, 'flower.lupine': 1600, grassBlades: 473093
   });
 });
 

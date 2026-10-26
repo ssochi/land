@@ -38,10 +38,23 @@
 </aside>
 
 <div class="bar glass">
+  <button type="button" class="chip walk" id="walkBtn" aria-pressed="false" title="第一人称漫游（V）">第一人称</button>
   <div class="cams" id="cams" role="group" aria-label="镜头"></div>
   <div class="sliders">
     <div class="sl"><label for="todInput">时刻 <b id="todOut">上午</b></label><input type="range" id="todInput" min="0" max="1" step="0.001" value="0.3"></div>
     <div class="sl"><label for="windInput">风力 <b id="windOut">0.50</b></label><input type="range" id="windInput" min="0" max="1" step="0.01" value="0.5"></div>
+  </div>
+</div>
+
+<div class="fp-hud" id="fpHud" hidden>
+  <div class="crosshair" aria-hidden="true"></div>
+  <p class="fp-hint glass" id="fpHint" aria-live="polite"><b id="fpState">步行</b><span class="keys">WASD 移动 · Shift 冲刺 · 空格 跳跃 · F 或双击空格 飞行（空格升 / C 降）· V 退出</span><span class="lock">点击画面锁定鼠标</span></p>
+</div>
+<div class="touch-pad" id="touchPad" hidden>
+  <div class="stick glass" id="stick" aria-label="移动摇杆"><div class="knob" id="knob"></div></div>
+  <div class="touch-btns">
+    <button type="button" class="glass" id="btnJump">跳</button><button type="button" class="glass" id="btnFly">飞</button>
+    <button type="button" class="glass" id="btnSprint" aria-pressed="false">冲刺</button><button type="button" class="glass" id="btnDown">降</button>
   </div>
 </div>
 

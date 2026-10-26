@@ -16,7 +16,7 @@ runtime   参数 schema 与校验、scene.js 拿到的 `m` 对象（api.js）、
   ↓
 render    three.js：共享 uniform、通用 GLSL、各类材质与网格构建、阴影、湖面反射、地平线图、后期、风痕、飞絮、时刻。
   ↓
-app       编辑器编排（editor.js）、镜头、鼠标拨草、DOM 界面、window.mapEditor。
+app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称（walker.js 纯物理，first-person.js 键鼠 / 触屏输入）、DOM 界面、window.mapEditor。
 ```
 
 规则：
@@ -37,7 +37,7 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、DOM 界面、
 5. 地形网格（`render/terrain-mesh.js`，陡坡顶点做崖面位移）、水面和瀑布水雾（`render/water-mesh.js`，同时把湖交给反射）、地平线图（`render/horizon.js`）。
 6. 应用 `m.env()`，切到默认镜头，`window.__mapReady = true`，控制台打印 `MAP_REPORT {json}`。
 
-每一帧：更新镜头 → 阴影（只有窗口移动或太阳转动时重画）→ 湖面反射（看不到湖时跳过）→ 主场景 + 后期。哪些物体参与阴影和反射由 three.js 的图层决定，编号在 `render/layers.js`：`SHADOW` 投影，`REFLECT` 出现在湖面倒影里。
+每一帧：更新镜头（第一人称时先按 1/60 s 固定步长推进 walker，相机放在眼睛位置）→ 阴影（只有窗口移动或太阳转动时重画）→ 湖面反射（看不到湖时跳过）→ 主场景 + 后期。哪些物体参与阴影和反射由 three.js 的图层决定，编号在 `render/layers.js`：`SHADOW` 投影，`REFLECT` 出现在湖面倒影里。
 
 ## 开发与打包
 
@@ -66,6 +66,7 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、DOM 界面、
 
 - `core.test.js`：随机数、噪声、堆。
 - `schema.test.js`：默认值、必填、类型错误、未知参数告警。
+- `walker.test.js`：第一人称的步行 / 冲刺速度、跳跃高度、悬崖挡路而矮坎能跳上去、飞行与落地、树和墙的碰撞、深水游泳。
 - `features.test.js`：台地的顶面和崖壁坡度、土路找平且不放置物件、树荫规则、河流入湖时水面降到湖面并截断。
 - `scene.test.js`：在 Node 里完整生成示例场景，锁定水位、地形范围和每种模型的数量（与浏览器里的报告一致）；以及脚本出错时的行号、调用返回值可被后续调用使用。
 

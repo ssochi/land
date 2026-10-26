@@ -1,5 +1,7 @@
 // Ruins and landmarks built from weathered stone blocks: broken walls, pillars, arches and a watchtower.
 // Blocks are slightly jittered and inset so the joints read as dark lines; moss grows on upward faces.
+// Each geometry carries userData.colliders: [[x, z, r], …] circles covering its footprint in model space,
+// used for walking collision and to keep grass and later placements out of the masonry.
 import * as THREE from 'three';
 import { mulberry32 } from '../core/math.js';
 import { vnoise } from '../core/noise.js';
@@ -74,7 +76,9 @@ export function makeWall(seed) {
     }
   }
   rubble(mb, R, 5 + Math.floor(R() * 4), L * 1.1, 4, seed);
-  return mb.geo();
+  const g = mb.geo(); g.userData.colliders = [];
+  for (let x = -L / 2 + 0.4; x < L / 2; x += 0.8) g.userData.colliders.push([x, 0, 0.75]);
+  return g;
 }
 
 // broken column: plinth, a stack of slightly offset drums, a tilted fragment on top
@@ -90,7 +94,8 @@ export function makePillar(seed) {
   }
   addDrum(mb, 0.1, 0.05, y, y + dh * 0.45, r * 0.8, 7, R(), stoneColor(R, y, y), mossTop(0, y, seed, 0.2));
   rubble(mb, R, 3, 4, 4, seed);
-  return mb.geo();
+  const g = mb.geo(); g.userData.colliders = [[0, 0, r * 1.5]];
+  return g;
 }
 
 // arch: two block piers carrying a ring of voussoirs, one or two of them fallen
@@ -117,7 +122,8 @@ export function makeArch(seed) {
     }
   }
   rubble(mb, R, 4, span * 2, 3, seed);
-  return mb.geo();
+  const g = mb.geo(); g.userData.colliders = [[-(span / 2 + pier / 2), 0, 0.7], [span / 2 + pier / 2, 0, 0.7]];
+  return g;
 }
 
 // watchtower landmark (~26–32 m): tapering coursed shaft with corner buttresses, dark window slits,
@@ -152,5 +158,6 @@ export function makeTower(seed) {
     mb.tri(ids[0], ids[2], ids[1]);
   }
   rubble(mb, R, 6, 14, 14, seed);
-  return mb.geo();
+  const g = mb.geo(); g.userData.colliders = [[0, 0, w0 / 2 + 0.3], ...[[1, 1], [1, -1], [-1, 1], [-1, -1]].map(([sx, sz]) => [sx * w0 / 2, sz * w0 / 2, 0.8])];
+  return g;
 }

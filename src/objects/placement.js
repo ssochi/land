@@ -3,7 +3,7 @@ import { mulberry32 } from '../core/math.js';
 import { fbm } from '../core/noise.js';
 import { DETAIL, FAR, heightAt, slopeAt, stampGrid } from '../world/grid.js';
 import { OCC, FOREST_D, FOREST_F, waterLevelAt, waterDistAt, moistureAt, sunAt, pathAt } from '../world/fields.js';
-import { KINDS } from './kinds.js';
+import { KINDS, kindGeo } from './kinds.js';
 
 export const INST = {};        // 'kind|variant|lo' -> [{ x, y, z, s, r, tilt }]
 const OBST = new Map();        // spatial hash (4m cells) -> [{ x, z, r }]: trunks and rocks that block later placements
@@ -20,6 +20,24 @@ export function obstHit(x, z, r) {
     for (const o of l) if ((o.x - x) ** 2 + (o.z - z) ** 2 < (o.r + r) ** 2) return true;
   }
   return false;
+}
+
+// move a circle of radius r at (x, z) out of every obstacle it overlaps (a few relaxation passes)
+export function obstPush(x, z, r) {
+  for (let it = 0; it < 3; it++) {
+    let moved = false;
+    const R = Math.ceil((r + 8) / 4), cx = Math.floor(x / 4), cz = Math.floor(z / 4);
+    for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) {
+      const l = OBST.get((cx + a + 1000) * 4096 + (cz + b + 1000)); if (!l) continue;
+      for (const o of l) {
+        const dx = x - o.x, dz = z - o.z, m = o.r + r, d2 = dx * dx + dz * dz;
+        if (d2 >= m * m) continue;
+        const d = Math.sqrt(d2) || 1e-4; x = o.x + dx / d * m; z = o.z + dz / d * m; moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return { x, z };
 }
 
 // returns a sampler () => [x, z] for a scatter area; polygon misses return NaN (counted as 'area' rejects)
@@ -67,7 +85,11 @@ function addInstance(kind, x, z, s, rot, variant, R) {
   const lo = K.lo && !DETAIL.inside(x, z) && Math.hypot(x, z) > K.lodDist;  // full model anywhere the camera can walk
   const key = kind + '|' + v + '|' + (lo ? 1 : 0);
   (INST[key] || (INST[key] = [])).push({ x, z, y: heightAt(x, z) - K.sink * s, s, r: rot, tilt: K.tilt });
-  if (K.trunk) obstAdd(x, z, K.trunk * s);
+  if (K.colliders) {
+    // footprint circles in model space, rotated like the instance (three.js Y rotation)
+    const c = Math.cos(rot), sn = Math.sin(rot);
+    for (const [lx, lz, r] of kindGeo(kind, v, lo).userData.colliders) obstAdd(x + (lx * c + lz * sn) * s, z + (-lx * sn + lz * c) * s, r * s);
+  } else if (K.trunk) obstAdd(x, z, K.trunk * s);
   if (K.occ && DETAIL.inside(x, z)) stampGrid(DETAIL, OCC, x, z, K.canopy * s, K.occ, 0.8);
   if (K.forest) { stampGrid(FAR, FOREST_F, x, z, K.canopy * s * 1.7, 0.4, 1); if (DETAIL.inside(x, z)) stampGrid(DETAIL, FOREST_D, x, z, K.canopy * s * 1.5, 0.35, 1); }
 }

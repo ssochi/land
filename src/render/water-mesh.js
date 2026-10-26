@@ -51,7 +51,7 @@ void main(){
   col = mix(col, skyR, fres * smoothstep(0.0, 0.5, d));
   float cs = cloudShadow(vWP.xz);
   float spec = pow(max(dot(R, uSunDir), 0.0), 220.0) * 3.5 + pow(max(dot(R, uSunDir), 0.0), 24.0) * 0.18;
-  float spark = step(0.86, wav(vWP.xz * 2.6 + uTime * 0.6)) * pow(max(dot(R, uSunDir), 0.0), 8.0) * 1.2;
+  float spark = step(0.86, wav(vWP.xz * 2.6 + uTime * 0.6)) * pow(max(dot(R, uSunDir), 0.0), 8.0) * 1.2 * smoothstep(3.0, 18.0, length(cameraPosition - vWP));  // glints read as blobs up close
   col += uSunColor * (spec + spark) * cs;
   float fn = vnoise(vWP.xz * 1.6 - vFlow * uTime * 1.4 + uTime * 0.2);
   float shoreFoam = (1.0 - smoothstep(0.0, 0.28 + 0.12 * sin(uTime * 1.6 + fn * 6.0), d)) * smoothstep(0.35, 0.6, fn + 0.25);

@@ -107,6 +107,31 @@ input[type="range"]:focus-visible { outline: 2px solid var(--gold); outline-offs
 .loading span { font-family: var(--font-mono); font-size: 11px; color: rgba(244, 241, 226, 0.85); letter-spacing: 0.04em; }
 .loading.done { opacity: 0; pointer-events: none; }
 
+[hidden] { display: none !important; }
+
+/* first-person mode */
+.chip.walk { flex: none; }
+.fp-hud { position: fixed; inset: 0; pointer-events: none; }
+.crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(244, 241, 226, 0.85); box-shadow: 0 0 0 1px rgba(20, 30, 25, 0.35); }
+.fp-hint {
+  position: absolute; left: 50%; transform: translateX(-50%); top: calc(16px + env(safe-area-inset-top, 0px));
+  margin: 0; padding: 7px 14px; border-radius: 999px; font-size: 12px; color: var(--ink-dim);
+  display: flex; gap: 10px; align-items: baseline; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden;
+}
+.fp-hint b { color: var(--gold); font-weight: 600; letter-spacing: 0.08em; }
+.fp-hint .lock { color: var(--ink); }
+.fp-hint.locked .lock, .fp-hint.touch .keys, .fp-hint.touch .lock { display: none; }
+body.walking .title, body.walking .icon-btn, body.walking .drawer { visibility: hidden; }
+.touch-pad {
+  position: fixed; left: 0; right: 0; bottom: calc(150px + env(safe-area-inset-bottom, 0px));
+  display: flex; justify-content: space-between; align-items: flex-end; padding: 0 20px; pointer-events: none;
+}
+.stick { width: 120px; height: 120px; border-radius: 50%; position: relative; pointer-events: auto; touch-action: none; }
+.knob { position: absolute; left: 50%; top: 50%; width: 48px; height: 48px; margin: -24px; border-radius: 50%; background: rgba(244, 241, 226, 0.55); }
+.touch-btns { display: grid; grid-template-columns: repeat(2, 60px); gap: 10px; pointer-events: auto; }
+.touch-btns button { width: 60px; height: 60px; border-radius: 50%; color: var(--ink); font: inherit; font-size: 14px; touch-action: none; appearance: none; }
+.touch-btns button[aria-pressed="true"] { color: var(--gold); border-color: rgba(236, 213, 133, 0.55); }
+
 @media (max-width: 640px) {
   .drawer { top: calc(60px + env(safe-area-inset-top, 0px)); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
   .title p { max-width: 60vw; }

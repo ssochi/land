@@ -2,6 +2,7 @@
 // build(fn) = reset world -> run script -> settle water -> build meshes -> apply env -> report.
 import * as THREE from 'three';
 import { isSmall, reduceMotion } from '../platform.js';
+import { clamp } from '../core/math.js';
 import { heightAt } from '../world/grid.js';
 import { currentB } from '../water/water.js';
 import { distributeGrass } from '../objects/grass.js';
@@ -23,6 +24,8 @@ import { createShadows } from '../render/shadows.js';
 import { createPost } from '../render/post.js';
 import { createControls, resolveCam, surfaceAt } from './camera.js';
 import { createPointerPush } from './pointer.js';
+import { WALK, createWalker, stepWalker, walkerView, walkerState } from './walker.js';
+import { createFirstPersonInput } from './first-person.js';
 import * as ui from './ui.js';
 
 const tick = () => new Promise(r => requestAnimationFrame(() => r()));
@@ -40,8 +43,69 @@ export function createEditor(renderer, canvas) {
   MIST_PX.value = renderer.getPixelRatio();
   const pointer = createPointerPush(canvas, camera);
 
-  const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls, renderer };
+  const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls, renderer, mode: 'orbit' };
   let worldGroup = null;
+
+  // ── first person ─────────────────────────────────────
+  const ORBIT_FOV = 45, WALK_FOV = 62, touch = matchMedia('(pointer: coarse)').matches;
+  let walker = null;
+  const fp = createFirstPersonInput(canvas, {
+    active: () => ed.mode === 'walk',
+    onToggle: () => (ed.mode === 'walk' ? exitWalk() : enterWalk()),
+    onLook: (dyaw, dpitch) => { walker.yaw += dyaw; walker.pitch = fp.clampPitch(walker.pitch + dpitch); }
+  });
+
+  // o: { x, z, yaw, pitch, fly } — anything omitted comes from the current camera; entering from high above starts in flight
+  function enterWalk(o = {}) {
+    if (!ed.built) return null;
+    const d = camera.getWorldDirection(new THREE.Vector3());
+    const x = o.x != null ? o.x : camera.position.x, z = o.z != null ? o.z : camera.position.z;
+    const fly = o.fly != null ? !!o.fly : o.x == null && camera.position.y - heightAt(x, z) > 8;
+    walker = createWalker(x, z, { yaw: o.yaw != null ? o.yaw : Math.atan2(-d.x, -d.z), pitch: o.pitch != null ? o.pitch : Math.asin(clamp(d.y, -1, 1)) * 0.5,
+      y: fly ? (o.x == null ? camera.position.y : heightAt(x, z) + 20) - WALK.eye : null, flying: fly });
+    ed.mode = 'walk'; controls.enabled = false;
+    camera.fov = WALK_FOV; camera.updateProjectionMatrix();
+    ui.setWalkMode(true, touch);
+    applyWalker(); shadows.invalidate(); streaks.respawnAll();
+    return walkerState(walker);
+  }
+
+  function exitWalk() {
+    if (ed.mode !== 'walk') return;
+    ed.mode = 'orbit'; fp.release();
+    const v = walkerView(walker);
+    controls.target.set(v.x + v.dx * 10, v.y + v.dy * 10, v.z + v.dz * 10);
+    camera.fov = ORBIT_FOV; camera.updateProjectionMatrix();
+    controls.enabled = true; controls.update();
+    ui.setWalkMode(false);
+  }
+
+  // place the camera at the walker's eye; the orbit target follows the gaze so shadows, wind streaks and
+  // pollen stay centred on what the player looks at
+  function applyWalker() {
+    const v = walkerView(walker);
+    camera.position.set(v.x, v.y, v.z);
+    controls.target.set(v.x + v.dx * 8, v.y + v.dy * 8, v.z + v.dz * 8);
+    camera.lookAt(controls.target);
+    const fov = WALK_FOV + (walker.sprinting ? (walker.flying ? 12 : walker.swimming ? 2 : 7) : 0);   // speed kick
+    if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * 0.15; camera.updateProjectionMatrix(); }
+    ui.setWalkState(walker.flying ? (walker.sprinting ? '疾飞' : '飞行') : walker.swimming ? '游泳' : !walker.grounded ? '空中' : walker.sprinting ? '冲刺' : '步行');
+  }
+
+  function updateWalker(dt) {
+    for (let t = dt; t > 1e-6; t -= 1 / 60) stepWalker(walker, Math.min(t, 1 / 60), fp.input);   // fixed substeps
+    applyWalker();
+  }
+
+  // scripted input for agents and headless runs: held values persist, jump / fly fire once
+  function setInput(o = {}) {
+    const i = fp.input;
+    for (const k of ['forward', 'right']) if (o[k] != null) i[k] = clamp(+o[k], -1, 1);
+    for (const k of ['sprint', 'up', 'down']) if (o[k] != null) i[k] = !!o[k];
+    if (o.jump) i.jump = true;
+    if (o.fly) i.toggleFly = true;
+    return Object.assign({}, i);
+  }
 
   function setTimeOfDay(v) { applyTOD(v); ui.showTimeOfDay(todLabel(v), U.uFogColor.value.getHexString()); }
 
@@ -50,6 +114,7 @@ export function createEditor(renderer, canvas) {
   function setCamera(name) {
     const c = typeof name === 'string' ? ed.cameras.find(q => q.name === name) : name;
     if (!c) return false;
+    exitWalk();
     const { pos, tgt } = resolveCam(c);
     camera.position.copy(pos); controls.target.copy(tgt); controls.update();
     ui.markCam(c.name || null);
@@ -73,6 +138,7 @@ export function createEditor(renderer, canvas) {
   }
 
   async function build(fn) {
+    exitWalk();
     ed.built = false; window.__mapReady = false;
     const t0 = performance.now();
     ed.sceneFn = fn;
@@ -123,9 +189,11 @@ export function createEditor(renderer, canvas) {
   }
 
   function renderFrame() {
-    controls.update();
-    const g = surfaceAt(camera.position.x, camera.position.z) + 0.6;  // keep the camera above ground and water
-    if (camera.position.y < g) camera.position.y = g;
+    if (ed.mode !== 'walk') {
+      controls.update();
+      const g = surfaceAt(camera.position.x, camera.position.z) + 0.6;  // keep the camera above ground and water
+      if (camera.position.y < g) camera.position.y = g;
+    }
     sky.position.copy(camera.position);
     U.uFogDensity.value = atmosphere.fogBase;
     pollen.m.uniforms.uCenter.value.set(controls.target.x, heightAt(controls.target.x, controls.target.z), controls.target.z);
@@ -133,23 +201,26 @@ export function createEditor(renderer, canvas) {
   }
 
   // advance animation time by sec in fixed 50ms steps (deterministic headless stepping)
-  function step(sec) { const n = Math.max(1, Math.round((sec || 0) / 0.05)); for (let i = 0; i < n; i++) { U.uTime.value += 0.05; streaks.update(0.05); } }
+  function step(sec) { const n = Math.max(1, Math.round((sec || 0) / 0.05)); for (let i = 0; i < n; i++) { U.uTime.value += 0.05; if (ed.mode === 'walk') updateWalker(0.05); streaks.update(0.05); } }
 
   function resize() { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); post.resize(); reflection.resize(); }
 
   function start() {
-    ui.initUI({ onTime: setTimeOfDay, onWind: v => { U.uWind.value = v; } });
+    ui.initUI({ onTime: setTimeOfDay, onWind: v => { U.uWind.value = v; }, onWalk: () => (ed.mode === 'walk' ? exitWalk() : enterWalk()) });
     addEventListener('resize', resize);
     const clock = new THREE.Clock();
     const frame = () => {
       const dt = Math.min(clock.getDelta(), 0.05);
       U.uTime.value += dt;
-      pointer.update(dt);
+      const walking = ed.mode === 'walk';
+      if (ed.built && !ed.paused && walking) updateWalker(dt);
+      pointer.update(dt, walking ? walker : null);
       if (ed.built && !ed.paused) { streaks.update(dt); renderFrame(); }
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
   }
 
-  return Object.assign(ed, { build, setCamera, setView, renderFrame, step, start, worldGroup: () => worldGroup });
+  return Object.assign(ed, { build, setCamera, setView, renderFrame, step, start, worldGroup: () => worldGroup,
+    walk: enterWalk, orbit: exitWalk, setInput, player: () => (walker ? Object.assign({ mode: ed.mode }, walkerState(walker)) : { mode: ed.mode }) });
 }

@@ -22,6 +22,11 @@ export function installAgentAPI(ed, canvas) {
     pause: (on) => { ed.paused = on !== false; return ed.paused; },
     step: (sec) => ed.step(sec),
     snapshot: () => { ed.renderFrame(); return canvas.toDataURL('image/png'); },
+    // first person
+    walk: (o) => ed.walk(o),
+    orbit: () => { ed.orbit(); return ed.player(); },
+    input: (o) => ed.setInput(o),
+    player: () => ed.player(),
     // escape hatch for debugging: the live three.js objects and shared uniforms
     debug: { renderer: ed.renderer, scene: ed.scene, camera: ed.camera, controls: ed.controls, uniforms: U, world: () => ed.worldGroup() }
   };

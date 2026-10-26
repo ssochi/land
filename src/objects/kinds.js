@@ -4,6 +4,7 @@
 //   canopy   shade radius             occ    canopy occlusion strength stamped on the ground
 //   sink     metres sunk into the ground    tilt  align to the terrain normal
 //   forest   darkens the ground as forest floor    lo/lodDist  low-detail variant beyond lodDist outside DETAIL
+//   colliders  the geometry's userData.colliders footprint replaces the single trunk circle (walls, towers)
 import { makeOak, makeBirch, makePine, makeBush } from './trees.js';
 import { makeDaisy, makePoppy, makeLupine, makeButtercup } from './flowers.js';
 import { makeRock } from './rocks.js';
@@ -26,10 +27,10 @@ export const KINDS = {
   'rock.cliff':      { make: s => makeRock(s, 'cliff'), variants: 4, mat: 'rock', radius: 6, trunk: 4, sink: 1.4, tilt: true, occ: 0.3, canopy: 5 },
   'rock.boulder':    { make: s => makeRock(s, 'boulder'), variants: 4, mat: 'rock', radius: 1.6, trunk: 1.2, sink: 0.25, tilt: true, occ: 0.25, canopy: 1.6 },
   'rock.pebble':     { make: s => makeRock(s, 'pebble'), variants: 3, mat: 'rock', radius: 0.35, trunk: 0.3, sink: 0.08, tilt: true },
-  'ruin.wall':       { make: s => makeWall(s), variants: 3, mat: 'rock', radius: 6, trunk: 2.2, canopy: 3, occ: 0.25, sink: 0.25 },
-  'ruin.pillar':     { make: s => makePillar(s), variants: 3, mat: 'rock', radius: 3, trunk: 0.9, canopy: 1.2, occ: 0.2, sink: 0.15 },
-  'ruin.arch':       { make: s => makeArch(s), variants: 2, mat: 'rock', radius: 6, trunk: 1.4, canopy: 2.5, occ: 0.2, sink: 0.2 },
-  'tower':           { make: s => makeTower(s), variants: 2, mat: 'rock', radius: 14, trunk: 3.8, canopy: 5, occ: 0.35, sink: 0.5 }
+  'ruin.wall':       { make: s => makeWall(s), variants: 3, mat: 'rock', colliders: true, radius: 6, trunk: 2.2, canopy: 3, occ: 0.25, sink: 0.25 },
+  'ruin.pillar':     { make: s => makePillar(s), variants: 3, mat: 'rock', colliders: true, radius: 3, trunk: 0.9, canopy: 1.2, occ: 0.2, sink: 0.15 },
+  'ruin.arch':       { make: s => makeArch(s), variants: 2, mat: 'rock', colliders: true, radius: 6, trunk: 1.4, canopy: 2.5, occ: 0.2, sink: 0.2 },
+  'tower':           { make: s => makeTower(s), variants: 2, mat: 'rock', colliders: true, radius: 14, trunk: 3.8, canopy: 5, occ: 0.35, sink: 0.5 }
 };
 
 // shown in the in-page API reference and exposed as mapEditor.kinds
