@@ -7,7 +7,8 @@ import { waterLevelAt } from '../world/fields.js';
 export function createControls(camera, canvas) {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true; controls.dampingFactor = 0.07; controls.enablePan = true; controls.screenSpacePanning = false;
-  controls.minDistance = 2; controls.maxDistance = 1200; controls.maxPolarAngle = Math.PI * 0.5 + 0.08; controls.rotateSpeed = 0.55;
+  // up to ~26° above the horizon: low shots looking up at cliffs and towers (the frame loop keeps the camera above ground)
+  controls.minDistance = 2; controls.maxDistance = 1200; controls.maxPolarAngle = Math.PI * 0.5 + 0.45; controls.rotateSpeed = 0.55;
   return controls;
 }
 

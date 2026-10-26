@@ -23,6 +23,6 @@ export function installAgentAPI(ed, canvas) {
     step: (sec) => ed.step(sec),
     snapshot: () => { ed.renderFrame(); return canvas.toDataURL('image/png'); },
     // escape hatch for debugging: the live three.js objects and shared uniforms
-    debug: { scene: ed.scene, camera: ed.camera, controls: ed.controls, uniforms: U, world: () => ed.worldGroup() }
+    debug: { renderer: ed.renderer, scene: ed.scene, camera: ed.camera, controls: ed.controls, uniforms: U, world: () => ed.worldGroup() }
   };
 }

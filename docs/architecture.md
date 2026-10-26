@@ -5,16 +5,16 @@
 ```
 core      随机数、噪声、堆。纯函数，没有状态。
   ↓
-world     DETAIL / FAR 两层高度网格，派生标量场（WATER、WDIST、FLOW、OCC、COVER、FOREST），
-          以及 terrainVer 等构建版本号。heightAt / normalAt / moistureAt 等查询都在这里。
+world     DETAIL / FAR 两层高度网格，派生标量场（WATER、WDIST、FLOW、OCC、COVER、FOREST、PATH），
+          折线工具（polyline.js），以及 terrainVer 等构建版本号。heightAt / normalAt / moistureAt 等查询都在这里。
   ↓
-terrain   塑形操作（noise、mountains、peak、hill、flatten、smooth、apply）和侵蚀（erode、thermal）。
+terrain   塑形操作（noise、mountains、peak、hill、flatten、plateau、terrace、smooth、apply）、侵蚀（erode、thermal）、土路（path.js）。
 water     河道开挖（river.js）、湖泊泛洪（lake.js），水体场的惰性重算（water.js）。
-objects   模型库（kinds.js 注册表 + trees / flowers / rocks 生成器）、scatter / place、草叶分布。
+objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures / undergrowth 生成器）、scatter / place、草叶分布。
   ↓
 runtime   参数 schema 与校验、scene.js 拿到的 `m` 对象（api.js）、不含渲染的世界生成流程（generate.js）。
   ↓
-render    three.js：共享 uniform、通用 GLSL、各类材质与网格构建、阴影、地平线图、后期、风痕、飞絮、时刻。
+render    three.js：共享 uniform、通用 GLSL、各类材质与网格构建、阴影、湖面反射、地平线图、后期、风痕、飞絮、时刻。
   ↓
 app       编辑器编排（editor.js）、镜头、鼠标拨草、DOM 界面、window.mapEditor。
 ```
@@ -34,8 +34,10 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、DOM 界面、
 2. `runScript(fn, session)`：执行 `scene.js`。每个 `m.*` 调用先按 schema 校验参数、填默认值，再立即执行，并把状态、耗时、备注和行号写进报告。脚本抛错时构建继续，错误带行号写进报告。
 3. `settleWater()`：刷新水体场，把湖和河写进报告。
 4. 物件实例化（`render/props.js`）、草叶分布（`objects/grass.js`）与草网格（`render/grass.js`）。
-5. 地形网格（`render/terrain-mesh.js`）、水面（`render/water-mesh.js`）、地平线图（`render/horizon.js`）。
+5. 地形网格（`render/terrain-mesh.js`，陡坡顶点做崖面位移）、水面和瀑布水雾（`render/water-mesh.js`，同时把湖交给反射）、地平线图（`render/horizon.js`）。
 6. 应用 `m.env()`，切到默认镜头，`window.__mapReady = true`，控制台打印 `MAP_REPORT {json}`。
+
+每一帧：更新镜头 → 阴影（只有窗口移动或太阳转动时重画）→ 湖面反射（看不到湖时跳过）→ 主场景 + 后期。哪些物体参与阴影和反射由 three.js 的图层决定，编号在 `render/layers.js`：`SHADOW` 投影，`REFLECT` 出现在湖面倒影里。
 
 ## 开发与打包
 
@@ -64,6 +66,7 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、DOM 界面、
 
 - `core.test.js`：随机数、噪声、堆。
 - `schema.test.js`：默认值、必填、类型错误、未知参数告警。
+- `features.test.js`：台地的顶面和崖壁坡度、土路找平且不放置物件、树荫规则、河流入湖时水面降到湖面并截断。
 - `scene.test.js`：在 Node 里完整生成示例场景，锁定水位、地形范围和每种模型的数量（与浏览器里的报告一致）；以及脚本出错时的行号、调用返回值可被后续调用使用。
 
 改动生成算法导致 `scene.test.js` 的数字变化是预期内的，确认画面后更新期望值即可；纯重构不应该让它变化。

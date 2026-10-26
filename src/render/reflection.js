@@ -1,4 +1,4 @@
-// Planar lake reflection: the scene (sky, terrain, trees and rocks — objects on the REFLECT layer) rendered
+// Planar lake reflection: the scene (sky, terrain, trees, rocks, rivers — objects on the REFLECT layer) rendered
 // from the camera mirrored across the lake surface, with an oblique near plane so nothing below the water
 // leaks in (Lengyel's oblique clipping, as in three's Reflector). Half resolution, skipped when no lake is visible.
 import * as THREE from 'three';
@@ -58,8 +58,11 @@ export function createReflection(renderer, scene, camera) {
     clip.multiplyScalar(2 / clip.dot(q));
     e[2] = clip.x; e[6] = clip.y; e[10] = clip.z + 1 - 0.003; e[14] = clip.w;
     const prev = renderer.getRenderTarget();
+    // rivers (waterfalls) are reflected too: unbind the texture being drawn, or WebGL drops their draws as a feedback loop
+    REFL.uReflOn.value = 0; REFL.uRefl.value = null;
     renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, virtualCam);
     renderer.setRenderTarget(prev);
+    REFL.uReflOn.value = 1; REFL.uRefl.value = rt.texture;
   }
 
   resize();

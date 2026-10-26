@@ -8,6 +8,7 @@ import { WATERS } from '../water/water.js';
 import { mat } from './material.js';
 import { PAL } from './uniforms.js';
 import { REFL } from './reflection.js';
+import { REFLECT } from './layers.js';
 
 const waterMat = mat(`
 attribute float aGround; attribute vec2 aFlow; attribute float aFall;
@@ -140,7 +141,7 @@ export function buildWaterMeshes(group) {
     g.setAttribute('aFlow', new THREE.Float32BufferAttribute(fl, 2));
     g.setAttribute('aFall', new THREE.Float32BufferAttribute(fa, 1));
     g.setIndex(idx);
-    const m = new THREE.Mesh(g, waterMat); m.renderOrder = 3; group.add(m);
+    const m = new THREE.Mesh(g, waterMat); m.renderOrder = 3; m.layers.enable(REFLECT); group.add(m);
   }
   return lakes;
 }

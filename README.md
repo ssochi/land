@@ -4,15 +4,19 @@
 
 传统地图编辑器是给人用的：拖笔刷、摆物件、在视口里反复调整。agent 没有手和眼睛，它擅长的是写代码、读结构化反馈、按截图迭代。所以 land 把整张地图做成了一段 `scene.js`：地形、侵蚀、湖和河、树花石、草地、环境与镜头，全部是函数调用。每次调用立即执行并返回结果，构建完成后输出带行号的结构化报告，配合无头出图，agent 可以形成「写脚本 → 看报告和截图 → 改脚本」的闭环。
 
-附带的示例场景「镜湖原野」是一片湖畔山谷：东北小山流下一条溪注入湖中，四周是分层的远山和针叶林。
+附带的示例场景「镜湖原野」是一片湖畔山谷：西侧台地上的瀑布泻入湖中、倒映在湖面上，东北小山流下一条溪；一条土路从南边草甸经过遗迹，通向湖岸和东南山丘上的瞭望塔；四周是分层的远山和针叶林。
 
-![主镜头](docs/hero.jpg)
+![瀑布倒影](docs/hero.jpg)
 
-| 湖岸 | 原野树丛 |
+| 湖岸 | 遗迹 |
 | --- | --- |
-| ![湖岸](docs/lake.jpg) | ![树丛](docs/grove.jpg) |
-| **溪流** | **花田** |
-| ![溪流](docs/river.jpg) | ![花田](docs/field.jpg) |
+| ![湖岸](docs/lake.jpg) | ![遗迹](docs/ruins.jpg) |
+| **瞭望塔** | **溪流** |
+| ![瞭望塔](docs/tower.jpg) | ![溪流](docs/river.jpg) |
+
+同一机位的前后对比（左：初版，右：当前）：
+
+![前后对比](docs/before-after.jpg)
 
 ## 设计原则
 
@@ -27,10 +31,11 @@
 **旷野之息的美术标准**
 
 - **生态驱动的布局**：植被由坡度、湿度（汇流累积）、坡向日照、离水距离决定，而不是随机撒点。
-- **大气纵深**：高度雾、随距离偏蓝的远景、分层山体，让画面有空气感。
+- **大气纵深**：雾色随环境和时刻变化（绿地偏青绿、黄昏偏暖），远山压成剪影；低处有成片的山谷雾，太阳有大片眩光。
 - **风是主角**：草浪亮带、成簇摆动的树、风痕和飞絮由同一个风场驱动。
 - **绘画感的光**：柔和的明暗交界、逆光透射、边缘光、冷暖分区调色，而不是写实 PBR。
-- **可读的剪影**：树冠、岩石、山脊都有清晰的轮廓和层次。
+- **可读的剪影**：树冠、岩石、山脊、崖壁、塔楼都有清晰的轮廓和层次。
+- **关卡设计**：地标让人定位，遗迹是沿路的兴趣点，土路引导视线；台地和瀑布构成画面焦点。
 
 ## 快速开始
 
@@ -51,9 +56,12 @@ defineScene((m) => {
   const t = m.terrain;
   t.mountains({ inner: 420, outer: 760, height: 100 });
   t.erode({ grid: 'far', droplets: 110000 });
-  t.lower(15, -80, 62, 15);                                   // 挖湖盆
+  t.hill(15, -80, { radius: 62, height: -15, shape: 'smooth', warp: 16 });  // 挖湖盆，轮廓不再是正圆
+  t.plateau(-78, -122, { radius: 30, height: 26, cliff: 5 }); // 四周是垂直崖壁的台地
 
+  m.path([[-62, 140], [-40, 38], [-26, -10], [-44, -58]], { width: 2.6 });   // 土路：草和树会避开
   const creek = m.water.river([[122, -128], [84, -104], [40, -86]], { width: 6 });
+  m.water.river([[-86, -116], [-61, -104], [-40, -94], [-22, -86]], { width: 4 }); // 从台地边缘落下，就是瀑布
   const lake = m.water.lake(15, -80, { fill: 'spill' });     // 自动取溢出水位，返回 { level, area }
   m.log(`湖面 ${lake.level}m`);
 
@@ -68,22 +76,32 @@ defineScene((m) => {
     rules: { slope: [0, 0.28], moisture: [0.18, 1] },         // 湿润平缓的低地
     cluster: { size: 4, radius: 18 },                          // 成簇分布
   });
+  m.place('tower', 95, 62);                                    // 地标
+  m.scatter('fern', { count: 320, area: m.circle(0, -10, 150), rules: { canopy: [0.2, 1] } });  // 林下
   m.grass({ center: [0, -15], radius: 118 });
-  m.camera('hero', { at: [-84, -28], eye: 3.4, look: [25, -140], lookEye: 10 });
+  m.env({ time: 0.28, haze: '#86b3a3', valleyFog: { height: -4, thickness: 12, density: 0.0035 } });
+  m.camera('falls', { at: [44, -84], eye: 1.6, look: [-46, -102], lookEye: 9 });
 });
 ```
 
 | 分类 | 调用 |
 | --- | --- |
-| 地形 | `t.noise` `t.mountains` `t.peak` `t.hill` / `t.raise` / `t.lower` `t.flatten` `t.smooth` `t.erode` `t.thermal` `t.apply((x, z, h) => …)` |
-| 水 | `m.water.river(path, …)` → `{ length, drop, points() }`，`m.water.lake(x, z, …)` → `{ level, area }` |
-| 物件 | `m.scatter(kind, { count, area, rules, cluster })`，`m.place(kind, x, z)` |
-| 草与环境 | `m.grass(…)` `m.env({ time, wind, fogDensity, snowLine })` `m.camera(name, …)` |
+| 地形 | `t.noise` `t.mountains` `t.peak` `t.hill` / `t.raise` / `t.lower` `t.flatten` `t.plateau` `t.terrace` `t.smooth` `t.erode` `t.thermal` `t.apply((x, z, h) => …)` |
+| 水 | `m.water.river(path, …)` → `{ length, drop, points() }`（陡段自动画成瀑布），`m.water.lake(x, z, …)` → `{ level, area }` |
+| 路 | `m.path(points, { width, flatten, wear })` → `{ length }` |
+| 物件 | `m.scatter(kind, { count, area, rules, cluster })`，`m.place(kind, x, z, { rotation, scale })` |
+| 草与环境 | `m.grass(…)` `m.env({ time, wind, haze, hazeFar, valleyFog, clouds, glare, snowLine, … })` `m.camera(name, …)` |
 | 查询 | `m.heightAt` `m.slopeAt` `m.normalAt` `m.waterAt` `m.flowAt` `m.moistureAt` `m.sunAt` `m.noise` `m.random(seed)` |
 
-散布规则 `rules` 支持 `height`、`slope`、`waterDist`、`moisture`、`sun`（均为 `[min, max]`）和 `noise` 遮罩。
+散布规则 `rules` 支持 `height`、`slope`、`waterDist`、`moisture`、`sun`、`canopy`（树荫，均为 `[min, max]`）和 `noise` 遮罩；水下和路面上不会放置。
 
-模型库：`tree.oak` `tree.big` `tree.birch` `tree.pine` `bush` `flower.daisy` `flower.poppy` `flower.lupine` `flower.buttercup` `rock.boulder` `rock.cliff` `rock.pebble`。
+模型库：
+
+- 树木：`tree.oak` `tree.big` `tree.birch` `tree.pine` `bush`
+- 林下与水边：`fern` `plant.broadleaf` `reed`
+- 花：`flower.daisy` `flower.poppy` `flower.lupine` `flower.buttercup`
+- 岩石：`rock.boulder` `rock.cliff` `rock.pebble`
+- 遗迹与地标：`ruin.wall` `ruin.pillar` `ruin.arch` `tower`
 
 参数的权威定义在 [`src/runtime/schema.js`](src/runtime/schema.js)，页面里的「脚本 API」面板由它生成。
 
@@ -104,7 +122,7 @@ node tools/render.mjs --page dist/index.html
 
 输出目录（默认 `out/`）里有每个镜头的 PNG 和 `report.json`。构建出错时进程以非零状态退出。
 
-页面加载后，`window.mapEditor` 提供 `run(fn)` 重建、`report()`、各种查询、`camera()`、`view()`、`pause()` / `step()` / `snapshot()` 等接口，供控制台或无头浏览器使用。
+页面加载后，`window.mapEditor` 提供 `run(fn)` 重建、`report()`、各种查询、`camera()`、`view()`、`pause()` / `step()` / `snapshot()` 等接口，供控制台或无头浏览器使用；`mapEditor.debug` 暴露 three.js 的 renderer、scene、camera 和共享 uniform，方便排查渲染问题。
 
 ## 开发
 
@@ -162,18 +180,27 @@ docs/               截图与架构说明
 - 树冠用叶片卡片，法线从外包球传递。
 - 松树是层叠针叶加叶簇卡片。
 - 岩石用随机半空间切割球体，再叠加岩层，得到平面块状。
+- 遗迹和塔由错缝、内缩的石块砌成，顶面长苔，周围散落碎石。
+- 蕨是拱形叶轴加成对小叶，芦苇是外倾叶片加香蒲穗。
 
 **渲染**
 - **阴影**：太阳正交阴影贴图（叶片按 alpha 测试投影）。
 - **地平线图**：8 个方位，用于天空可见度和随时刻变化的山体大尺度投影。
-- **雾**：随高度变薄的高度雾，距离越远越偏蓝。
-- **后期**：泛光、高光压缩加冷暖分区调色、屏幕空间体积光。
+- **崖壁**：三向投影（triplanar）的岩石着色，柱状胞元噪声给每块岩体一个法线朝向，叠加不规则岩层、风化竖纹和地衣；陡坡顶点沿下坡方向做三维噪声位移，崖面不再是平滑拉伸的一片。
+- **大气**：高度雾 + 只看距离的空气透视；山谷雾层沿视线积分指数高度雾，并用噪声切成飘动的雾团；雾色可按环境着色。
+- **水**：湖面平面反射（镜像相机 + 斜近裁剪面，半分辨率，看不到湖时跳过）；河道陡段画成白色下落水帘，脚下有水雾。
+- **后期**：泛光、太阳眩光（按太阳处天空可见度缩放）、高光压缩加冷暖分区调色、屏幕空间体积光。
 - **草**：实例化草叶，带风浪亮带，鼠标划过时草叶被拨开。
+
+## 对照旷野之息
+
+画面是对着 6 张旷野之息实际截图调的（4 张官方 4K 宣传图）。可以量化的一项是近景草地的局部明暗对比（草叶之间的明暗差）：初版 0.041–0.061，旷野之息 0.013–0.023，当前 0.022–0.029；草地亮度从 0.35–0.43 提到 0.47–0.56。
 
 ## 距离目标还差什么
 
-- **画面**：没有屏幕空间 AO；原作那种笔触感的后期滤镜、卡通描边还没做；水面没有真实反射。
-- **内容**：只有温带草原一种生物群落；没有悬崖地形、洞穴、建筑、道路等人造物；模型库还小。
+- **画面**：没有屏幕空间 AO；原作那种笔触感的后期滤镜、卡通描边还没做；没有夜晚、点光源和天气。
+- **地貌**：地形是高度场，做不出内凹、洞穴和天然石拱；只有温带草原一种生物群落。
+- **内容**：没有动物和声音；遗迹和建筑种类还少，没有桥、马厩、营地。
 - **规模**：可行走的细节区域是 ±160m（网格 0.8m），远景 ±1100m（网格 3.7m），还不是无缝大世界。
-- **性能**：30 万草叶、9000 多棵松树加阴影和后期，只在软件渲染下测过，真机帧率未测；手机上会自动降低草的密度和阴影分辨率。
+- **性能**：约 47 万草叶、9000 多棵松树，加上阴影、湖面反射和后期，只在软件渲染下测过，真机帧率未测；手机上会自动降低草的密度、阴影和反射分辨率。
 - **agent 工作流**：还没有场景之间的 diff、局部重建，以及对截图的自动美术评估。

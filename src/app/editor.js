@@ -40,7 +40,7 @@ export function createEditor(renderer, canvas) {
   MIST_PX.value = renderer.getPixelRatio();
   const pointer = createPointerPush(canvas, camera);
 
-  const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls };
+  const ed = { built: false, paused: false, sceneFn: null, report: null, cameras: [], scene, camera, controls, renderer };
   let worldGroup = null;
 
   function setTimeOfDay(v) { applyTOD(v); ui.showTimeOfDay(todLabel(v), U.uFogColor.value.getHexString()); }
