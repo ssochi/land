@@ -65,7 +65,7 @@ export const KINDS = {
 
 // shown in the in-page API reference and exposed as mapEditor.kinds
 export const KIND_DOCS = {
-  'tree.oak': '阔叶树，空间殖民算法生长枝干 + 叶片卡片，约 10m', 'tree.big': '大型孤树（同算法放大），约 16m，适合做地标', 'tree.pine': '针叶松，层叠针叶 + 叶簇卡片，8–14m，远处自动降级', 'tree.birch': '白桦，空间殖民生长，细高白干',
+  'tree.oak': '阔叶树：叶团树冠、低处分叉的主枝（空间殖民生长细枝）+ 叶片卡片，约 10m', 'tree.big': '大型孤树：更宽更扁的伞形树冠、粗短树干，约 13m，适合做地标', 'tree.pine': '针叶松，层叠针叶 + 叶簇卡片，8–14m，远处自动降级', 'tree.birch': '白桦：细高白干穿过窄长的叶团树冠',
   'bush': '灌木团', 'flower.daisy': '雏菊（白瓣黄心）', 'flower.poppy': '虞美人（红色杯状）', 'flower.lupine': '羽扇豆（紫色花穗）',
   'flower.buttercup': '毛茛（小黄杯）', 'flower.umbel': '伞形白花（蓍草 / 野胡萝卜一类）：一簇簇白色小花聚成平顶，旷野之息草地上最常见的白花', 'rock.boulder': '巨石：平面切割 + 岩层，顶面长苔', 'rock.cliff': '崖石露头，6–15m，适合放在陡坡上', 'rock.pebble': '卵石，适合河岸',
   'fern': '蕨：拱形羽状叶丛，约 1m，适合林下（配合 rules.canopy）', 'plant.broadleaf': '阔叶草本：大片椭圆叶，阴湿处', 'reed': '芦苇丛：细长叶片和香蒲穗，水边',

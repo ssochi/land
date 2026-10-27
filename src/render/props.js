@@ -71,10 +71,11 @@ varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying ve
 void main(){
   vec3 alb = vC; float alpha = 1.0;
   bool card = vCard > 0.5 && vCard < 1.5;
+  bool foliage = card || (vCard > 11.5 && vCard < 12.5);   // leaf cards, and the leaf masses of far trees (12)
   if (card) {
     vec4 lt = texture2D(uLeaf, vUV);
     // small mips average leaf alpha toward the gaps, so distant canopies would thin out and sparkle: boost by mip level
-    vec2 tx = vUV * vec2(512.0, 256.0);
+    vec2 tx = vUV * vec2(1024.0, 512.0);
     float lod = max(0.0, 0.5 * log2(max(dot(dFdx(tx), dFdx(tx)), dot(dFdy(tx), dFdy(tx)))));
     float a = lt.a * (1.0 + lod * 0.22);
     // alpha to coverage: a sharpened alpha gives MSAA-smoothed leaf edges instead of stair-stepped cut-outs
@@ -97,7 +98,7 @@ void main(){
     }
     N = perturb(N, vSP, uv, tn.xyz * 2.0 - 1.0);
     alb *= ta.rgb * mix(0.62, 1.05, tn.w) * 1.25;
-  } else if (vCard > 2.5) {
+  } else if (vCard > 2.5 && vCard < 3.5) {
     // textured stone (boulders, outcrops): the baked rock texture and normal map, triplanar in world space
     vec3 tw = pow(abs(N), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
     vec3 P = vSP / 2.6;
@@ -133,6 +134,10 @@ void main(){
     alb = mix(alb, leaf, ivy);
   }
   vec3 c = lighting(alb, N, vSP, uSharp);
+  // a crown is porous and its leaves translucent, but the shadow map sees every leaf card as opaque, so a crown
+  // would shade itself black inside: in shadow, foliage still gets part of the sun (more on the side facing it),
+  // as grass blades still pass skylight
+  if (foliage) c += alb * uSunColor * (1.0 - gShadow) * 0.4 * (0.35 + 0.65 * clamp(dot(N, uSunDir) * 0.5 + 0.5, 0.0, 1.0));
   vec3 V = normalize(vWP - cameraPosition);
   float back = pow(max(dot(V, uSunDir), 0.0), 3.0);
   c += uSunColor * mix(alb, vec3(0.72, 0.86, 0.3), card ? 0.35 : 0.0) * back * (uTrans + (card ? 0.45 : 0.0)) * gShadow;   // leaves glow when backlit

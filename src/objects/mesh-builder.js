@@ -51,7 +51,7 @@ export function icoDirs(detail) {
   g.dispose(); return (ICO[detail] = out);
 }
 
-// blob: lumpy sphere, normals blended toward an external center (fluffy canopy shading)
+// blob: lumpy sphere, normals blended toward an external center (fluffy canopy shading); o.card is its material
 export function addBlob(mb, C, r, detail, o) {
   const dirs = icoDirs(detail), ncen = o.ncenter || C, nb = o.nblend != null ? o.nblend : 0.6, lump = o.lump != null ? o.lump : 0.25, sq = o.squash || 1, seed = o.seed || 0;
   for (let t = 0; t < dirs.length; t += 3) {
@@ -61,7 +61,7 @@ export function addBlob(mb, C, r, detail, o) {
       const f = 1 + lump * (vnoise3(d.x * 2.3 + seed, d.y * 2.3, d.z * 2.3 - seed) - 0.5) * 2;
       const P = V3(C.x + d.x * r * f, C.y + d.y * r * f * sq, C.z + d.z * r * f);
       const nn = P.clone().sub(ncen).normalize().multiplyScalar(nb).add(d.clone().multiplyScalar(1 - nb)).normalize();
-      ids.push(mb.v(P.x, P.y, P.z, nn.x, nn.y, nn.z, o.color(P, d), o.sway(P)));
+      ids.push(mb.v(P.x, P.y, P.z, nn.x, nn.y, nn.z, o.color(P, d), o.sway(P), 0, 0, o.card));
     }
     mb.tri(ids[0], ids[1], ids[2]);
   }
@@ -80,7 +80,7 @@ export function addBlob(mb, C, r, detail, o) {
       const b2 = P.clone().addScaledVector(a2, -sz * 0.3).addScaledVector(d, -sz * 0.18);
       const nn = P.clone().sub(ncen).normalize().multiplyScalar(nb).add(d.clone().multiplyScalar(1 - nb)).normalize();
       const col = o.color(tip, d).clone().multiplyScalar(1.02 + R() * 0.12);
-      const i0 = mb.v(b1.x, b1.y, b1.z, nn.x, nn.y, nn.z, col, o.sway(b1)), i1 = mb.v(b2.x, b2.y, b2.z, nn.x, nn.y, nn.z, col, o.sway(b2)), i2 = mb.v(tip.x, tip.y, tip.z, nn.x, nn.y, nn.z, col, o.sway(tip));
+      const i0 = mb.v(b1.x, b1.y, b1.z, nn.x, nn.y, nn.z, col, o.sway(b1), 0, 0, o.card), i1 = mb.v(b2.x, b2.y, b2.z, nn.x, nn.y, nn.z, col, o.sway(b2), 0, 0, o.card), i2 = mb.v(tip.x, tip.y, tip.z, nn.x, nn.y, nn.z, col, o.sway(tip), 0, 0, o.card);
       mb.tri(i0, i1, i2); mb.tri(i0, i2, i1);
     }
   }
