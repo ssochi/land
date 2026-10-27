@@ -126,8 +126,9 @@ void main(){
         }
       }
     }
-    N = perturb(N, vSP, uv, tn.xyz * 2.0 - 1.0);
-    alb *= ta.rgb * mix(0.62, 1.05, tn.w) * 1.25;
+    // toon: flatter relief and shallower cavities — the painted look carries the material, not fine shading
+    N = perturb(N, vSP, uv, (tn.xyz * 2.0 - 1.0) * vec3(1.0 - 0.4 * uToon, 1.0 - 0.4 * uToon, 1.0));
+    alb *= ta.rgb * mix(mix(0.62, 0.8, uToon), 1.05, tn.w) * 1.25;
   } else if (vCard > 2.5 && vCard < 3.5) {
     // textured stone (boulders, outcrops): the baked rock texture and normal map, triplanar in world space
     vec3 tw = pow(abs(N), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
@@ -171,8 +172,10 @@ void main(){
   vec3 V = normalize(vWP - cameraPosition);
   float back = pow(max(dot(V, uSunDir), 0.0), 3.0);
   c += uSunColor * mix(alb, vec3(0.72, 0.86, 0.3), card ? 0.35 : 0.0) * back * (uTrans + (card ? 0.45 : 0.0)) * gShadow;   // leaves glow when backlit
-  float rim = pow(1.0 - max(dot(N, -V), 0.0), 3.0) * max(dot(N, uSunDir) + 0.3, 0.0);
-  c += uSunColor * rim * 0.14;
+  // rim light; toon makes it a crisp band along the lit side of the silhouette (the BotW contour glow)
+  float fr = 1.0 - max(dot(N, -V), 0.0);
+  float rim = mix(pow(fr, 3.0), smoothstep(0.62, 0.72, fr) * 0.55, uToon) * max(dot(N, uSunDir) + 0.3, 0.0);
+  c += uSunColor * rim * (0.14 + 0.1 * uToon) * mix(1.0, gShadow, uToon * 0.6);
   // lit windows (and lantern glass): warm interior light that comes up as the sun goes down
   if (glow > 0.0) {
     vec3 Vw = normalize(cameraPosition - vSP), Rw = reflect(-Vw, N);

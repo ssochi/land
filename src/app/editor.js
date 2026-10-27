@@ -133,7 +133,7 @@ export function createEditor(renderer, canvas) {
   function applyEnv(E) {
     atmosphere.fogOverride = E.fogDensity;
     atmosphere.haze = E.haze ? new THREE.Color(E.haze) : null;
-    U.uHazeFar.value = E.hazeFar; U.uCloudCover.value = E.clouds; U.uGlare.value = E.glare;
+    U.uHazeFar.value = E.hazeFar; U.uCloudCover.value = E.clouds; U.uGlare.value = E.glare; U.uToon.value = E.toon; U.uOutline.value = E.outline;
     const vf = E.valleyFog || {};
     U.uVFog.value.set(vf.height != null ? vf.height : 0, vf.thickness || 12, E.valleyFog ? (vf.density != null ? vf.density : 0.02) : 0);
     U.uWind.value = reduceMotion ? Math.min(E.wind, 0.25) : E.wind; U.uWindDir.value.set(E.windDir[0], E.windDir[1]).normalize();

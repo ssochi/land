@@ -5,9 +5,10 @@
 // with furrows lie outside, with a windmill on high ground and a signpost at the entrance. Everything is
 // deterministic in the seed and avoids water, steep ground, roads and other lots.
 import * as THREE from 'three';
-import { clamp, mulberry32 } from '../core/math.js';
+import { clamp, smooth, mulberry32 } from '../core/math.js';
+import { fbm } from '../core/noise.js';
 import { DETAIL, heightAt } from '../world/grid.js';
-import { TILL, TILL_DIR, waterLevelAt, waterDistAt } from '../world/fields.js';
+import { TILL, TILL_DIR, LAWN, waterLevelAt, waterDistAt } from '../world/fields.js';
 import { terrainChanged } from '../world/state.js';
 import { catmull, nearestOnPath } from '../world/polyline.js';
 import { TERRAIN } from '../terrain/index.js';
@@ -139,6 +140,16 @@ export function buildVillage(p, rep) {
   }
   for (const rd of roads) { carvePath({ path: rd.pts, width: rd.width, flatten: 0.8, wear: 1 }); rd.curve = catmull(rd.pts.map(([x, z]) => V2(x, z)), 1); }
   const roadDist = (x, z) => Math.min(...roads.map(rd => nearestOnPath(rd.curve, x, z).d - rd.width / 2));
+  // grass inside the village is grazed and trodden short (a ragged edge out past the last houses)
+  {
+    const n = DETAIL.n, st = DETAIL.step, R2 = rad * 1.15;
+    const i0 = clamp(Math.floor((cx - R2 - 8 - DETAIL.min) / st), 0, n - 1), i1 = clamp(Math.ceil((cx + R2 + 8 - DETAIL.min) / st), 0, n - 1);
+    const j0 = clamp(Math.floor((cz - R2 - 8 - DETAIL.min) / st), 0, n - 1), j1 = clamp(Math.ceil((cz + R2 + 8 - DETAIL.min) / st), 0, n - 1);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const px = DETAIL.x(i), pz = DETAIL.x(j), e = R2 * (0.85 + 0.3 * fbm(px * 0.04, pz * 0.04, 2, p.seed + 5)), d = Math.hypot(px - cx, pz - cz);
+      LAWN[j * n + i] = Math.max(LAWN[j * n + i], smooth(e + 8, e - 4, d) * p.lawn);
+    }
+  }
   // 2. plaza
   const plaza = p.plaza > 0 ? { x: cx, z: cz, radius: p.plaza } : null;
   if (plaza) { TERRAIN.flatten({ x: cx, z: cz, radius: p.plaza, height: heightAt(cx, cz), falloff: 6, strength: 0.85, warp: 3, seed: p.seed }); wearDisc(cx, cz, p.plaza, 0.85); }
@@ -169,6 +180,13 @@ export function buildVillage(p, rep) {
     if (corners(x, z, P.width + 0.6, P.depth + 0.6, r).some(([px, pz]) => roadDist(px, pz) < 0.5)) { rejected.road++; continue; }
     if (waterDistAt(x, z) < Math.max(P.width, P.depth) / 2 + 3) { rejected.water++; continue; }
     if (siteOK(x, z, P.width, P.depth, r, 3.2) == null) { rejected.slope++; continue; }
+    // no ledge between the door and the street (on terraced ground a lot can sit on the step above the road)
+    {
+      const [dx, dz] = toWorld(x, z, r, P.doorA, P.depth / 2 + 0.6);
+      let lo = 1e9, hi = -1e9;
+      for (let t = 0; t <= 1.001; t += 0.125) { const hh = heightAt(dx + (cd.x - dx) * t, dz + (cd.z - dz) * t); lo = Math.min(lo, hh); hi = Math.max(hi, hh); }
+      if (hi - lo > 1.6) { rejected.slope++; continue; }
+    }
     lots.push(Object.assign(lot, { P, seed, street: [+cd.x.toFixed(2), +cd.z.toFixed(2)] }));
   }
   // 4. cut every lot's shelf (terrain edits all happen before anything is placed), then build

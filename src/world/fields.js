@@ -14,11 +14,12 @@ export const FOREST_D = new Float32Array(ND), FOREST_F = new Float32Array(NF);
 export const FLOW_D = new Float32Array(ND), FLOW_F = new Float32Array(NF);
 export const PATH = new Float32Array(ND);                // worn track 0–1 (m.path)
 export const TILL = new Float32Array(ND), TILL_DIR = new Float32Array(ND);   // ploughed field 0–1 and furrow angle (m.field)
+export const LAWN = new Float32Array(ND);                // grazed / trodden short grass 0–1 (inside a village)
 
 let flowVer = -1;
 
 export function resetFields() {
-  WATER.fill(-1e9); WDIST.fill(999); OCC.fill(0); COVER.fill(0); FOREST_D.fill(0); FOREST_F.fill(0); PATH.fill(0); TILL.fill(0); TILL_DIR.fill(0);
+  WATER.fill(-1e9); WDIST.fill(999); OCC.fill(0); COVER.fill(0); FOREST_D.fill(0); FOREST_F.fill(0); PATH.fill(0); TILL.fill(0); TILL_DIR.fill(0); LAWN.fill(0);
   flowVer = -1;
 }
 

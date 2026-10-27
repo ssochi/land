@@ -26,7 +26,7 @@ export const SCHEMA = {
     cliff: [NUM, 8, '崖壁水平宽度，米：越小越陡'], ledges: [NUM, 2, '崖壁台阶数'], warp: [NUM, 20, '轮廓扭曲，米'], seed: [NUM, 0, ''] } },
   terrace:   { phase: 'terrain', desc: '梯田 / 台阶化：把半径内的高度量化成一级级平台和陡坎，适合做层叠的岩台、峡谷阶地。', params: {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], radius: [NUM, undefined, ''], step: [NUM, 6, '每级高度，米'],
-    sharpness: [NUM, 0.35, '陡坎占一级的比例 0–1'], falloff: [NUM, 30, '边缘过渡宽度'] } },
+    sharpness: [NUM, 0.35, '陡坎占一级的比例 0–1'], falloff: [NUM, 30, '边缘过渡宽度'], warp: [NUM, 0, '陡坎位置的起伏（米）：0 时沿等高线，1–3 让台地边缘弯曲错落'], seed: [NUM, 0, ''] } },
   river:     { phase: 'terrain', desc: '沿路径挖单调下降的河床，并生成流动水面。路径从上游写到下游。', params: {
     path: [PATH, undefined, '[[x,z],…] 至少 2 点'], width: [NUM, 6, '河道宽'], depth: [NUM, 1.4, '河床深'],
     bank: [NUM, 6, '河岸坡宽'], drop: [NUM, 0.01, '每米最小落差'] } },
@@ -56,6 +56,8 @@ export const SCHEMA = {
     hazeFar: [NUM, 0.45, '远景雾化 0–1：越大，远山越像只剩轮廓的平面剪影'],
     valleyFog: [OBJ, null, '山谷雾层 {height: 雾顶高度米, thickness: 衰减厚度米, density}，低处出现成片飘动的雾'],
     clouds: [NUM, 0.5, '云量 0–1'], glare: [NUM, 1, '太阳眩光强度'],
+    toon: [NUM, 0.8, '卡通渲染强度 0–1：明暗分成柔和的两阶、暗部提亮并偏冷保留固有色（旷野之息 / 原神式的“3渲2”质感）；0 是连续的写实明暗'],
+    outline: [NUM, 0.6, '描边强度 0–1：物体轮廓画一圈深色线（按深度跳变检测，远处淡出，草不描边）；0 关闭'],
     snowLine: [NUM, 170, '雪线，米'], streaks: [BOOL, true, '风痕'], pollen: [BOOL, true, '飞絮'],
     rock: [STR, null, '岩石主色（十六进制）：#d6d2c6 灰白石灰岩 · #b4876a 红砂岩 · 缺省 #977d69 暖灰褐'],
     grass: [OBJ, null, '{root,mid,tipA,tipB} 十六进制'], water: [OBJ, null, '{shallow,deep}'] } },
@@ -63,7 +65,8 @@ export const SCHEMA = {
     center: [XZ, undefined, '村中心（广场）'], radius: [NUM, 55, '村子半径，米'], houses: [NUM, 12, '房屋数量（目标）'],
     style: [STR, 'mixed', 'hateno | stone | timber | hut | mixed（哈特诺式为主的混合）'], gaps: [NUM, 0.15, '沿街留空地的比例 0–1（种树、菜园）'], roads: [ARR, null, '自定义道路：一条 [[x,z],…] 或多条 [[[x,z],…], …]；缺省自动生成主街和支路'],
     plaza: [NUM, 9, '广场半径，0 不要广场'], fields: [NUM, 2, '村外田地块数'], fences: [NUM, 0.55, '围篱笆后院的比例 0–1'],
-    lanterns: [NUM, 16, '路灯间距，米；0 不要'], props: [NUM, 1, '杂物多少 0–2'], trees: [NUM, 1, '树木多少 0–2'], windmill: [BOOL, true, '在村外高处立风车'], seed: [NUM, 0, ''] } },
+    lanterns: [NUM, 16, '路灯间距，米；0 不要'], props: [NUM, 1, '杂物多少 0–2'], trees: [NUM, 1, '树木多少 0–2'], windmill: [BOOL, true, '在村外高处立风车'],
+    lawn: [NUM, 1, '村里的草被踩短、啃短的程度 0–1（0 保持 m.grass 的高度）'], seed: [NUM, 0, ''] } },
   building:  { phase: 'objects', desc: '按参数盖一栋房屋（门朝 rotation 方向的 +z），默认先把宅基地压平。缺省的参数按 seed 随机。返回房屋尺寸和门口坐标。', params: {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], style: [STR, 'hateno', 'hateno（赭黄灰泥墙、陶瓦顶、高烟囱）| stone | timber | hut'], rotation: [NUM, 0, '弧度，0 = 门朝 +z'],
     front: [STR, null, 'eave（长边朝街）| gable（山墙朝街）'], width: [NUM, null, '正面宽，米'], depth: [NUM, null, '进深，米'], floors: [NUM, null, '1 或 2'],
@@ -93,7 +96,7 @@ export const SIGS = {
   hill: 't.hill(x, z, { radius, height, shape, warp })   简写：t.raise(x, z, r, h) · t.lower(x, z, r, depth)',
   flatten: 't.flatten(x, z, { radius, height, falloff, strength, warp, mode })',
   plateau: 't.plateau(x, z, { radius, height, cliff, ledges, warp, seed })',
-  terrace: 't.terrace(x, z, { radius, step, sharpness, falloff })',
+  terrace: 't.terrace(x, z, { radius, step, sharpness, falloff, warp, seed })',
   smooth: 't.smooth(x, z, { radius, iterations, strength })',
   erode: 't.erode({ grid, droplets, strength, inertia, capacity, seed })',
   apply: 't.apply((x, z, h) => 新高度, { grid })',
@@ -104,8 +107,8 @@ export const SIGS = {
   scatter: 'm.scatter(kind, { count, area, rules, scale, minSpacing, cluster, seed })  → { placed, requested, rejected, positions }',
   place: 'm.place(kind, x, z, { scale, rotation, variant })  → { x, y, z }',
   grass: 'm.grass({ center, radius, density, height, rules })',
-  env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, snowLine, streaks, pollen, rock, grass, water })',
-  village: 'm.village({ center, radius, houses, style, gaps, roads, plaza, fields, fences, lanterns, props, trees, windmill, seed })',
+  env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, toon, outline, snowLine, streaks, pollen, rock, grass, water })',
+  village: 'm.village({ center, radius, houses, style, gaps, roads, plaza, fields, fences, lanterns, props, trees, windmill, lawn, seed })',
   building: 'm.building(x, z, { style, rotation, front, width, depth, floors, roof, pitch, chimney, tower, banner, porch, tint, flatten, seed })',
   fence: 'm.fence(path, { style, gates })', field: 'm.field({ center, size, rotation, crop, fence, seed })',
   camera: 'm.camera(name, { label, at, eye, look, lookEye, fov } | { label, pos, target, fov })'

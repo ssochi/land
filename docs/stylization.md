@@ -1,0 +1,59 @@
+# 风格化渲染（「3渲2」）与哈特诺村对照
+
+这份笔记记录两件事：一是「3渲2」（用 3D 渲染出 2D 动画质感，原神、旷野之息 / 王国之泪那种画面）的调研和这里的实现，二是村庄对着哈特诺村截图找出的差距和改动。
+
+## 一、调研：「3渲2」由哪些东西构成
+
+| 手法 | 出处 / 代表 | 作用 |
+|---|---|---|
+| **明暗分阶**（ramp / 两阶光照） | 罪恶装备 Xrd（GDC 2015，Junya Motomura）、原神角色、各种 BotW 复刻着色器 | 受光面和背光面之间不是一条长渐变，而是一条窄而柔的交界线，画面像赛璐璐动画一样分成「亮面 / 暗面」两块色 |
+| **暗部换色而不是变灰** | 罪恶装备 Xrd 的阴影色贴图（暗部乘一张更饱和的颜色）、原神社区复刻着色器的「阴影色」参数 | 暗部保持并加深固有色、略微偏冷，黄墙的暗面是暖赭色而不是橄榄灰 |
+| **暗部提亮、整体低反差** | 旷野之息截图实测（下表）、BotW 复刻着色器的「shadow floor」 | 原作暗部亮度 p5 约 0.30–0.42，反差 0.09–0.14，空气通透；写实光照下暗部会掉到 0.1 |
+| **轮廓边缘光** | 旷野之息的 contour glow / rim，Roystan 的 toon shader 教程（rim 只在受光侧出现） | 受光一侧的轮廓上一条窄的亮边，把形体从背景里「描」出来 |
+| **描边** | 罪恶装备 Xrd、原神角色（反向外壳法，按顶点色控制粗细）；场景常用后期描边（深度 / 法线 Sobel，Unreal / Godot 文档都有现成做法） | 轮廓画线，最「二次元」的一笔；线色取物体本色压暗，而不是纯黑 |
+| **平涂、少细节的贴图** | 原神（基于 PBR 的风格化，按美术需求改材质光照模型，miHoYo Unity 分享）、旷野之息手绘贴图 | 大色块 + 少量笔触，细节靠形状不靠噪点；截图实测原作 1–5px / 5–20px 细节量只有写实渲染的一半 |
+| **大气、泛光、调色** | 原神的分层天空盒、体积雾、泛光、LUT（第三方分析）；旷野之息的朦胧空气 | 远景收进雾色，黑位抬起、饱和度略高 |
+
+角色专用的手法（SDF 脸部阴影图、头发高光、手绘法线让脸部阴影干净）这里没有角色，暂不涉及。
+
+## 二、这里的实现
+
+全部由 `m.env({ toon, outline })` 控制（0–1，默认 0.8 / 0.6，0 回到原来的写实明暗、关闭描边），改动在共享着色器里，所有地图一起生效：
+
+- **两阶光照**（`src/render/shaders/common.glsl.js` 的 `lighting()`）：原来的柔和交界 × 阴影图得到受光量 L，toon 把它压成 `smoothstep(0.2, 0.5, L)` 的一阶（保留 18% 的原渐变，曲面不至于变成纯平）。投影和自身背光走同一条交界，影子边缘仍是 PCF 的柔边。
+- **暗部**：环境光 ×(1+0.75·toon)，阳光 ×(1−0.3·toon)——亮面曝光不变，暗面亮了约一半；暗面颜色先把固有色饱和度推高 35%（保持色相），再乘一个偏冷的阴影色 `uShadeTint`。夜里自动退回写实（交给灯光）。
+- **边缘光**（`src/render/props.js`）：toon 把原来的 Fresnel 渐变换成受光侧轮廓上的一条窄亮带，在影子里减弱。
+- **描边**（`src/render/post.js`）：合成阶段读场景深度，某像素四邻里有明显更远的（深度跳变超过自身距离的约 5%，或是天空），它就在轮廓上，颜色乘 (0.5, 0.47, 0.55)——本色压暗偏冷。约一像素宽（按分辨率缩放），160m 内由近到远淡出；草写 alpha 0.5 作标记，不描边（否则每根草都会描一圈）；天空 alpha 0。
+- **平涂**：建筑贴图的法线起伏 ×(1−0.4·toon)、凹缝变暗从 0.62 收到 0.8；崖壁的裂缝变暗同样收浅；草地上的笔触纹理淡化成大块颜色，地面法线减弱；土路换成浅暖色、少石子、浅起伏。
+- **调色**：黑位抬起并略偏冷（`c·(1−0.07·toon) + 0.065·toon`），饱和度 +10%·toon，抵消抬黑带来的发灰。
+
+### 对照截图的指标（`node tools/compare.mjs`）
+
+| | 哈特诺村长家（参考） | 改前 | 改后 | 哈特诺街景（参考） | 改前 | 改后 |
+|---|---|---|---|---|---|---|
+| 暗部亮度 p5 | 0.297 | 0.105 | 0.201 | 0.42 | 0.102 | 0.184 |
+| 整体反差 | 0.143 | 0.242 | 0.234 | 0.139 | 0.214 | 0.195 |
+| 1–5px 细节 | 1.90 | 4.61 | 4.57 | 2.85 | 3.39 | 3.46 |
+| 5–20px 细节 | 3.26 | 6.57 | 6.45 | 3.34 | 5.73 | 5.75 |
+
+暗部提亮了约一倍，反差下降；细节量还是原作的近两倍——一部分是分辨率（原作 900p 放大，画面本来更软），一部分是草叶和砖瓦图案仍然偏密，是下一步要收的。四张野外对照场景（法罗尼、草丘、遗迹、岩壁）的暗部和反差都在原作 ±0.07 以内。
+
+## 三、村庄：和哈特诺村比差在哪
+
+参考：旷野之息的哈特诺村（`refs/` 里三张）和王国之泪的哈特诺村全景、村长家、旅馆、染坊、东风屋、筒仓等 15 张截图（Zelda Wiki）。按影响大小：
+
+1. **地形（全景里差距最大）**：哈特诺村建在一层层石灰岩台地上，台地之间是两三米到十几米的白色陡坎，房子坐在台地边上，路从陡坎的缺口斜着上去。原来的村子铺在一片均匀的草坡上，房子像摆上去的玩具。→ `t.terrace` 加了 `warp`（陡坎位置随噪声起伏，不再贴着等高线），示例场景把村子所在的坡切成每级 3.4m 的台地，陡坎由崖壁的 crag 起伏变成凹凸的岩面；`m.village` 不再把房子放在「门和街之间隔着一道坎」的位置。
+2. **地面**：原作村里是短而平的草坪，土路是浅黄褐色、边缘柔和；原来是没膝的草和深褐色、满是裂纹石块的路。→ `m.village` 会把村里的草「踩短」（新的 `LAWN` 场，草高 ×0.4、略密，参数 `lawn`），土路贴图换成浅暖色、石子少、起伏浅。
+3. **房屋材质**：原作墙脚是浅色大石块，瓦是偏橙的大块陶瓦（每排约 30cm，片片高低不一），王国之泪多了奶白色墙。→ 乱石放大到 40cm 以上、灰缝变浅、对比降低；瓦每 2m 6 排 5 列、偏橙、下沿参差、每片略带弧度；灰泥色加了奶白；墙面在檐下有一大片柔和的阴影（原作很明显）。
+4. **光照（街景和近景里差距最大）**：原作暗面明亮、偏暖，整体通透；原来暗面发灰发绿、反差大。→ 第二节的卡通光照。
+
+还没做的（下一步）：台地边上的挡土墙和弧形矮院墙、石拱门；老虎窗、木平台和外挂楼梯、藤蔓；王国之泪那种方塔和筒仓；更柔的草叶和更少的瓦片高频；动画风格的积云。
+
+## 参考
+
+- 罪恶装备 Xrd：[GDC 2015 讲稿（Arc System Works）](https://www.ggxrd.com/Motomura_Junya_GuiltyGearXrd.pdf)、[GDC Vault](https://gdcvault.com/play/1022031/GuiltyGearXrd-s-Art-Style-The)、[Blender Nation 摘要](https://www.blendernation.com/2015/07/26/junya-c-motomura-behind-the-scenes-of-guilty-gear-xrd/)
+- 原神：[GDC 2021 演讲介绍](https://www.gdconf.com/news/learn-about-making-genshin-impacts-open-world-gdc-2021)、[miHoYo 在 Unity 的主机渲染分享](https://docswell.com/s/UnityJapan/KWRPQ5-210617-unity-dojo20211mihoyozhenzhongyi)、[Blender 复刻原神着色器](https://bjayers.artstation.com/blog/category/5)、[原神式着色器教程（阴影色）](https://adrianmendez.artstation.com/projects/wJZ4Gg)
+- 旷野之息：[GDC 2017 美术分享报道](https://www.thumbsticks.com/gdc17-designing-zelda-breath-of-the-wild/)、[BotW 风格 toon shader（shadow floor、轮廓光）](https://github.com/ccontinisio/zelda-botw-toon-shader)、[Daniel Ilett 的 BotW 着色器复刻](https://github.com/unitycoder/shaders-botw-cel-shading)、[边缘光只在受光侧的做法](https://acarcana.itch.io/legend-of-rothan/devlog/216343/legend-of-rothan-toon-shader)
+- 通用：[Roystan toon shader 教程](https://roystan.net/articles/toon-shader/)（两阶光照、高光、rim 公式）、[Unreal 的 Sobel 描边后期](https://docs.unrealengine.com/udk/Three/DevelopmentKitGemsSobelEdgeDetection.html)、[Godot 的深度 + 法线 Sobel 描边](https://godotshaders.com/shader/sobel-outline-shader/)
+- LOD 交叉淡化：[Catlike Coding：LOD 与抖动交叉淡化](https://catlikecoding.com/unity/tutorials/custom-srp/lod-and-reflections/)、[Unity 手册：LOD 过渡](https://docs.unity3d.com/Manual/lod/lod-transitions-mesh-lod.html)
+- 哈特诺村截图：[Zelda Wiki · Hateno Village](https://zeldawiki.wiki/wiki/Hateno_Village)

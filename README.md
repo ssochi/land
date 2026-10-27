@@ -117,7 +117,7 @@ defineScene((m) => {
 | 路 | `m.path(points, { width, flatten, wear })` → `{ length }` |
 | 物件 | `m.scatter(kind, { count, area, rules, cluster })`，`m.place(kind, x, z, { rotation, scale })` |
 | 村庄与建筑 | `m.village({ center, radius, houses, style, … })` → 房屋 / 道路 / 田地的位置，`m.building(x, z, { style, front, floors, tower, … })`，`m.fence(path, { style })`，`m.field({ center, size, crop })` |
-| 草与环境 | `m.grass(…)` `m.env({ time, wind, haze, hazeFar, valleyFog, clouds, glare, snowLine, rock, … })` `m.camera(name, …)` |
+| 草与环境 | `m.grass(…)` `m.env({ time, wind, haze, hazeFar, valleyFog, clouds, glare, toon, outline, snowLine, rock, … })` `m.camera(name, …)` |
 | 查询 | `m.heightAt` `m.slopeAt` `m.normalAt` `m.waterAt` `m.flowAt` `m.moistureAt` `m.sunAt` `m.noise` `m.random(seed)` |
 
 散布规则 `rules` 支持 `height`、`slope`、`waterDist`、`moisture`、`sun`、`canopy`（树荫，均为 `[min, max]`）和 `noise` 遮罩；水下和路面上不会放置。
@@ -139,6 +139,18 @@ defineScene((m) => {
 
 切换距离按桌面 GPU 设定，小屏设备整体乘 0.65（`mapEditor.debug.lod.bias`）。
 
+## 卡通渲染（「3渲2」）
+
+画面默认是旷野之息 / 原神式的风格化渲染，由 `m.env({ toon, outline })` 控制（0–1，默认 0.8 / 0.6；`toon: 0` 回到连续的写实明暗）：
+
+- **两阶光照**：明暗交界压成一条窄而柔的线，受光面和背光面各成一块色；投影走同一条交界。
+- **暗部换色**：暗部提亮（环境光加强、阳光略减，曝光不变、反差下降），保持并加深固有色、略微偏冷——黄墙的暗面是暖赭色，不是橄榄灰。夜里自动退回写实，交给灯光。
+- **轮廓边缘光**：受光一侧的轮廓上一条窄亮边。
+- **描边**：按深度跳变检测轮廓，线色是物体本色压暗偏冷；约一像素宽、远处淡出，草不描边。
+- **平涂**：建筑贴图和崖壁的细小起伏、凹缝变暗收浅，草地的笔触淡化成大块颜色；调色抬起黑位、略增饱和度。
+
+调研来源（罪恶装备 Xrd 的 GDC 讲稿、原神和旷野之息的分享与复刻着色器等）、每一项的做法和对照截图的指标见 [docs/stylization.md](docs/stylization.md)。
+
 ## 村庄编辑器
 
 一行 `m.village()` 生成一个完整的村子，返回值里有每栋房屋（门口和门前街道上的点 `street`）、道路和田地的坐标，可以接着加工、取镜头：
@@ -152,9 +164,9 @@ m.camera('house', { at: v.houses[0].street, eye: 1.7, look: [v.houses[0].x, v.ho
 ```
 
 - **房屋**按参数生成（`src/objects/buildings.js`），造型和材质对着旷野之息 / 王国之泪哈特诺村的截图做：赭黄 / 米色灰泥墙，墙脚的灰泥按不规则的边沿剥落、露出底下的乱石（边沿顺着石块起伏，偶尔高处也掉一块），墙角是圆润的倒角，一部分房子墙角砌着长短相间、倒了棱的条石；门窗是在墙上真正开的洞，窗子小而深，带灰泥窗洞侧壁、伸出墙外的木窗台、折贴在墙上的木板百叶窗（绿、蓝灰、褐），窗下花箱里是一丛丛叶子和五瓣小花；门板退进门洞，钉着铁折页，门前是倒棱的石阶；壁灯是铁框玻璃灯笼挂在铁臂下；陶土瓦屋顶一排排瓦是真实的台阶状几何（每排下沿翘起一片瓦厚），压在深色木结构上（封檐板、山墙博风板、露出的椽头和檩条头、半圆脊瓦）；贴着山墙的高烟囱下宽上窄、像拉长的截头方锥（撑着木杆、顶上一顶小瓦帽）；屋后角上的圆塔和圆锥瓦顶、门上的小雨棚、临街的布幡、门口的陶罐。风格还有乱石墙配条石墙角的石屋、白墙木构架屋和茅草小屋；`front: 'gable'` 让山墙朝街。没给的参数按 seed 随机，所有随机选择都会固定下来，规划和模型完全一致。
-- **布局**：主街和一两条支路穿过广场（水井、集市摊、路灯），房屋沿路排开、门朝街，退距和朝向各有出入，沿街留出空地；每家门口一条踩出来的小路通到街上；坡地上的宅基地削坡成台，下坡一侧露出高高的乱石台基，门前砌石阶；后院围篱笆种菜，墙边种花和灌木，门口堆木桶木箱柴堆；空地种大树，村外开田（地面翻出垄沟）、高处立风车、村口立路牌。避开水面、陡坡、道路和彼此，全部由 seed 决定。
+- **布局**：主街和一两条支路穿过广场（水井、集市摊、路灯），房屋沿路排开、门朝街，退距和朝向各有出入，沿街留出空地；每家门口一条踩出来的小路通到街上，门和街之间不会隔着陡坎；村里的草被踩短成草坪（`lawn`）；坡地上的宅基地削坡成台，下坡一侧露出高高的乱石台基，门前砌石阶；后院围篱笆种菜，墙边种花和灌木，门口堆木桶木箱柴堆；空地种大树，村外开田（地面翻出垄沟）、高处立风车、村口立路牌。避开水面、陡坡、道路和彼此，全部由 seed 决定。
 - **氛围**：`m.env({ time })` 拨过 1.0 以后窗户、壁灯和路灯亮起来（点光源照亮周围的墙和地面），烟囱冒炊烟，天上出星星；`m.env({ rock })` 给崖壁和石头换主色（灰白石灰岩、红砂岩……）；`t.flatten({ mode: 'cut' })` 只削不填，可以在坡上开出平台。
-- 示例场景 [`scenes/village.js`](scenes/village.js)：缓坡上的哈特诺式山村，背后是石灰岩台地，下午的暖光。对照截图登记在 `refs/sources.json`（`hateno`、`hateno-street`、`hateno-house`），`node tools/compare.mjs hateno-house` 直接并排比较。
+- 示例场景 [`scenes/village.js`](scenes/village.js)：哈特诺式山村，村子所在的坡用 `t.terrace({ warp })` 切成几级台地，台地之间是石灰岩陡坎，背后是更高的台地，下午的暖光。和哈特诺村截图的逐项对比、改了什么、还差什么见 [docs/stylization.md](docs/stylization.md)。对照截图登记在 `refs/sources.json`（`hateno`、`hateno-street`、`hateno-house`），`node tools/compare.mjs hateno-house` 直接并排比较。
 
 参数的权威定义在 [`src/runtime/schema.js`](src/runtime/schema.js)，页面里的「脚本 API」面板由它生成。
 
@@ -232,10 +244,11 @@ tools/
   compare.mjs       和参考截图并排对比，输出指标表
   fetch-refs.mjs    下载参考截图
   thumbs.mjs        渲染主界面的地图预览图
+  lod-check.mjs     LOD 换级检查：相邻两级在切换距离上的画面差
 refs/               参考截图来源与对照配置（sources.json）
 scenes/ref/         按参考截图构图的对照场景
 test/               node --test
-docs/               截图、地图预览图（docs/maps/）与架构说明
+docs/               截图、地图预览图（docs/maps/）、架构说明、建模工具（modeling.md）、风格化渲染与哈特诺村对照（stylization.md）
 ```
 
 依赖只能自上而下：`core → world → terrain / water / objects → runtime → render → app`。`runtime` 及以下不碰 DOM 和 WebGL，所以整套世界生成可以在 Node 里运行和测试。模块划分、构建流程和扩展方式（新增脚本操作、新增模型）见 [docs/architecture.md](docs/architecture.md)。
@@ -297,7 +310,7 @@ docs/               截图、地图预览图（docs/maps/）与架构说明
 
 ## 距离目标还差什么
 
-- **画面**：没有屏幕空间 AO；原作那种笔触感的后期滤镜、卡通描边还没做；没有天气（雨、雪、阴天）。和哈特诺村截图比，阴影还偏深（暗部 p5 0.07 vs 0.30），原作的空气更朦胧。
+- **画面**：没有屏幕空间 AO 和笔触感的后期滤镜；描边只按深度检测轮廓，不画折痕线；没有天气（雨、雪、阴天）。和哈特诺村截图比，暗部已从 p5 0.10 提到 0.20（原作 0.30），细节量仍是原作的近两倍（草叶、瓦片偏密）。
 - **地貌**：地形是高度场，做不出内凹、洞穴和天然石拱；只有温带草原一种生物群落。
 - **内容**：没有动物、村民和声音；建筑只有民居一类，还没有桥、马厩、营地、拱门和挡土墙；村里的树还偏「棒棒糖」形。
 - **规模**：可行走的细节区域是 ±160m（网格 0.8m），远景 ±1100m（网格 3.7m），还不是无缝大世界。

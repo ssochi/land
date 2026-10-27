@@ -18,6 +18,8 @@ defineScene((m) => {
   t.peak(380, -640, { radius: 260, height: 120, sharpness: 1.25, ridges: 0.5, seed: 10 });
   t.erode({ grid: 'far', droplets: 90000, seed: 12 });
   t.erode({ grid: 'detail', droplets: 20000, strength: 0.45, seed: 13 });
+  // 村子所在的坡切成几级台地，台地之间是白色石灰岩陡坎（哈特诺村就建在一层层岩台上）
+  t.terrace(0, -8, { radius: 80, step: 3.4, sharpness: 0.1, falloff: 40, warp: 3.5, seed: 3 });
 
   // 小溪从崖下流过村西
   m.water.river([[-150, -120], [-112, -80], [-96, -30], [-102, 25], [-128, 75]], { width: 4.5, depth: 1.1, bank: 4 });
@@ -49,7 +51,11 @@ defineScene((m) => {
   m.camera('house', { label: '村屋', at: h0.street, eye: 1.7, look: [h0.x, h0.z], lookEye: 3.2, fov: 62 });
   const near = (h, t) => [h.door[0] + (h.street[0] - h.door[0]) * t, h.door[1] + (h.street[1] - h.door[1]) * t];
   m.camera('door', { label: '门前', at: near(h1, 0.6), eye: 1.7, look: [h1.x, h1.z], lookEye: 2.6, fov: 64 });
-  m.camera('plaza', { label: '广场', at: [v.plaza.x + 12, v.plaza.z + 10], eye: 2.2, look: [v.plaza.x, v.plaza.z], lookEye: 1.5, fov: 58 });
+  const pd = [road[3][0] - v.plaza.x, road[3][1] - v.plaza.z], pl = Math.hypot(...pd);   // from the main street, 14m out of the plaza
+  m.camera('plaza', { label: '广场', at: [v.plaza.x + pd[0] / pl * 14, v.plaza.z + pd[1] / pl * 14], eye: 3.4, look: [v.plaza.x, v.plaza.z], lookEye: 1.5, fov: 58 });
   m.camera('lane', { label: '小巷', at: v.roads[1] ? v.roads[1].points[2] : road[4], eye: 1.8, look: v.roads[1] ? v.roads[1].points[0] : road[2], lookEye: 2.5, fov: 58 });
-  if (v.windmill) m.camera('windmill', { label: '风车', at: [v.windmill[0] + 8, v.windmill[1] + 46], eye: 2.5, look: v.windmill, lookEye: 6, fov: 50 });
+  if (v.windmill) {   // from the village side, high enough to see over the roofs
+    const wd = [v.plaza.x - v.windmill[0], v.plaza.z - v.windmill[1]], wl = Math.hypot(...wd);
+    m.camera('windmill', { label: '风车', at: [v.windmill[0] + wd[0] / wl * 40, v.windmill[1] + wd[1] / wl * 40], eye: 7, look: v.windmill, lookEye: 6, fov: 50 });
+  }
 });

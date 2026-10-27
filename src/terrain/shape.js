@@ -96,12 +96,15 @@ export function plateau(p) {
   });
 }
 
-// quantise heights into terraces inside a radius: flat treads, steep risers (`sharpness` = riser share of a step)
+// quantise heights into terraces inside a radius: flat treads, steep risers (`sharpness` = riser share of a step).
+// warp (metres of height) shifts where each riser falls with smooth noise, so the ledges wander across the slope
+// instead of tracing its contour lines exactly
 export function terrace(p) {
+  const wp = p.warp || 0, s = p.seed || 0;
   eachCell((x, z, h) => {
     const w = smooth(p.radius + p.falloff, p.radius, Math.hypot(x - p.x, z - p.z));
     if (w <= 0) return h;
-    const q = h / p.step, f = Math.floor(q);
+    const o = wp ? (fbm(x * 0.03, z * 0.03, 3, s + 21) - 0.5) * 2 * wp : 0, q = (h + o) / p.step, f = Math.floor(q);
     return h + ((f + smooth(1 - p.sharpness, 1, q - f)) * p.step - h) * w;
   });
 }

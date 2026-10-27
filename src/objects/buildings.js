@@ -28,7 +28,7 @@ import { Poly, bake, emit } from './poly/index.js';
 const C = hex => new THREE.Color(hex);
 const STONE = C('#bfae92'), TIMBER = C('#5e4532'), TIMBER_L = C('#86664a'), IRON = C('#33312e'), GLOW = C('#ffd9a0');
 const TILE_C = C('#ffffff'), THATCH_C = C('#ffffff'), SHINGLE_T = [C('#c49a7a'), C('#8a95a6'), C('#a57d64')];
-const WASH = { hateno: ['#e6c47e', '#edd49c', '#ecd8b0', '#e4bf8c', '#ddb56c'], stone: ['#c4b49a'], timber: ['#f2ece0'], hut: ['#a8957c'] };
+const WASH = { hateno: ['#e6c47e', '#edd49c', '#ecd8b0', '#e4bf8c', '#ddb56c', '#f1e7d0'], stone: ['#c4b49a'], timber: ['#f2ece0'], hut: ['#a8957c'] };
 const SHUTTER = [C('#4e6a58'), C('#53708e'), C('#6c533f'), C('#5d7448'), C('#7d4b43')];
 const BANNER = [C('#a3456b'), C('#5f7f3f'), C('#3f5f8f'), C('#b0703a')];
 const BLOOM = [C('#ee7a2a'), C('#d8402f'), C('#e8c33a'), C('#e070a0'), C('#f2efe6')];
@@ -293,7 +293,8 @@ function buildHouse(seed, lod, params) {
   // ── walls: faces with holes cut for the door and the windows (deep plaster reveals), shaded darker toward the
   // ground and under the eaves, their corners softly rounded by a narrow strip whose normals turn the corner ──
   const CH = hut ? 0 : 0.07;
-  const eaveRows = [[y0 - 0.05, 0.92], [y0 + 0.6, 0.99], [yW - 0.9, 0.98], [yW, 0.8]], gableRows = [[y0 - 0.05, 0.92], [y0 + 0.6, 0.99], [yW, 0.95]];
+  // the wall darkens softly toward the ground and broadly up under the eaves (the overhang's shade, painted in)
+  const eaveRows = [[y0 - 0.05, 0.88], [y0 + 0.6, 0.99], [yW - 1.5, 0.97], [yW, 0.68]], gableRows = [[y0 - 0.05, 0.88], [y0 + 0.6, 0.99], [yW, 0.93]];
   const rowsOf = f => (f === 'f' || f === 'b' ? eaveRows : gableRows);
   const shadeAt = (rows, y) => {
     for (let k = 1; k < rows.length; k++) if (y <= rows[k][0]) { const [ya, ka] = rows[k - 1], [yb, kb] = rows[k]; return ka + (kb - ka) * Math.max(0, y - ya) / (yb - ya); }
@@ -444,11 +445,11 @@ function buildHouse(seed, lod, params) {
     const n = V3(0, cp, s * sp), down = V3(0, -sp, s * cp), ez = s * (hz + ov);
     const Ru = x => V3(x, ridgeU, 0), Eu = x => V3(x, eaveU, ez), o1 = n.clone().multiplyScalar(td), o2 = n.clone().multiplyScalar(td + tt);
     if (roof === 'tile' && lod === 0) {
-      // tile courses as geometry, in step with the texture's rows (9 per 2m): each course's lower edge stands a
+      // tile courses as geometry, in step with the texture's rows (6 per 2m): each course's lower edge stands a
       // tile's thickness proud of the deck, so the courses catch the light and step along the rakes and eaves.
-      // Farther levels lay the same texture on a plane: its rows carry the courses' shading, and the 4.5cm steps
+      // Farther levels lay the same texture on a plane: its rows carry the courses' shading, and the 6cm steps
       // are under a pixel from there
-      const top = Ru(0).add(o2), dn = Eu(0).add(o2).sub(top), sl = dn.length(), pc = 2 / 9, lip = 0.045, nC = Math.ceil(sl / pc - 0.05);
+      const top = Ru(0).add(o2), dn = Eu(0).add(o2).sub(top), sl = dn.length(), pc = 2 / 6, lip = 0.06, nC = Math.ceil(sl / pc - 0.05);
       dn.divideScalar(sl);
       const at = (x, t, up) => V3(x, top.y, top.z).addScaledVector(dn, t).addScaledVector(n, up);
       for (let k = 0; k < nC; k++) {

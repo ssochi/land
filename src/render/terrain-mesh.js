@@ -56,20 +56,22 @@ void main(){
   // painted sward (baked strokes) at two scales: brightness and how far toward the bleached tip colour
   vec4 sw1 = texture2D(uSwardA, vWP.xz / 1.7), sw2 = texture2D(uSwardA, vWP.xz / 6.3 + 0.37);
   float swB = mix(sw1.r, sw2.r, 0.4) / 0.8, swT = mix(sw1.g, sw2.g, 0.4);
-  vec3 meadow = mix(gMid, gTip, clamp(0.22 + swT * 0.55, 0.0, 1.0)) * 0.86 * mottle * mix(1.0, swB, 0.55);
+  // toon: the strokes soften into broad colour (a lawn reads as a smooth carpet, not scratched ground)
+  float swK = 1.0 - 0.55 * uToon;
+  vec3 meadow = mix(gMid, gTip, clamp(0.22 + swT * 0.55 * swK, 0.0, 1.0)) * 0.86 * mottle * mix(1.0, swB, 0.55 * swK);
   meadow = mix(meadow, vec3(0.6, 0.62, 0.34), smoothstep(45.0, 130.0, alt + n1 * 25.0) * 0.45);
   meadow = mix(meadow, vec3(0.42, 0.55, 0.3), smoothstep(110.0, 170.0, alt) * 0.5);
   meadow = mix(meadow, vec3(0.24, 0.44, 0.25), wet * 0.45);
   // up close under the blades: the stems' shaded mid tone, so gaps have depth without reading as dark holes
-  vec3 sward = mix(gMid, gTip, 0.15 + swT * 0.3) * 0.8 * mottle * mix(1.0, swB, 0.5);
+  vec3 sward = mix(gMid, gTip, 0.15 + swT * 0.3 * swK) * 0.8 * mottle * mix(1.0, swB, 0.5 * swK);
   vec3 base = mix(meadow, sward, clamp(vCover, 0.0, 1.0) * (1.0 - smoothstep(5.0, 30.0, dist)) * 0.95);
   float cavS; vec3 Ns = triNormal(uSwardN, vWP, N, vec3(0.0, 1.0, 0.0), 1.0 / 1.7, 0.6, cavS);
-  N = normalize(mix(N, Ns, (1.0 - slope) * tuftK));
+  N = normalize(mix(N, Ns, (1.0 - slope) * tuftK * swK));
   // worn track: packed earth with grit, a ragged grassy edge and a slightly lighter centre
   float worn = smoothstep(0.3, 0.7, vPath + (vnoise(vWP.xz * 0.9) - 0.5) * 0.45);
   vec3 dirt = texture2D(uDirtA, vWP.xz / 3.2).rgb * (0.92 + 0.16 * vnoise(vWP.xz * 0.35)) * mix(1.0, 1.08, smoothstep(0.7, 1.0, vPath));
-  float cavD; vec3 Nd = triNormal(uDirtN, vWP, N, vec3(0.0, 1.0, 0.0), 1.0 / 3.2, 1.0, cavD);
-  dirt *= mix(0.7, 1.0, cavD);
+  float cavD; vec3 Nd = triNormal(uDirtN, vWP, N, vec3(0.0, 1.0, 0.0), 1.0 / 3.2, 0.45, cavD);   // soft relief: a trodden track, not crazed mud
+  dirt *= mix(0.86, 1.0, cavD);
   base = mix(base, dirt, worn); N = normalize(mix(N, Nd, worn));
   // ploughed field: ridges and furrows along the field's direction (filtered so they fade, not alias, far away)
   float till = smoothstep(0.25, 0.7, vTill);
@@ -107,7 +109,7 @@ void main(){
     vec2 th = vec2(-Ng.z, Ng.x); float thl = length(th);
     float along = thl > 0.05 ? dot(vWP.xz, th / thl) : vWP.x;
     float streak = vnoise(vec2(along * 0.45, alt * 0.03)) * 0.6 + vnoise(vec2(along * 1.3, alt * 0.08 + 3.0)) * 0.4;
-    rock *= mix(0.72, 1.05, c1) * mix(0.45, 1.1, c2) * (0.96 + 0.06 * bed) * (0.9 + 0.14 * streak) * (1.0 - clamp(wear * 0.1, 0.0, 0.25));
+    rock *= mix(0.72 + 0.1 * uToon, 1.05, c1) * mix(0.45 + 0.17 * uToon, 1.1, c2) * (0.96 + 0.06 * bed) * (0.9 + 0.14 * streak) * (1.0 - clamp(wear * 0.1, 0.0, 0.25));
     N = normalize(mix(N, Nrock, rockAmt));
   }
   base = mix(base, rock, rockAmt);
