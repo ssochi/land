@@ -38,6 +38,7 @@
 </aside>
 
 <div class="bar glass">
+  <button type="button" class="chip maps-btn" id="mapsBtn" title="回到主界面选地图（M）">地图</button>
   <button type="button" class="chip walk" id="walkBtn" aria-pressed="false" title="第一人称漫游（V）">第一人称</button>
   <div class="cams" id="cams" role="group" aria-label="镜头"></div>
   <div class="sliders">
@@ -58,11 +59,27 @@
   </div>
 </div>
 
-<div class="loading" id="loading"><div><strong>正在构建地图</strong><span id="loadStage">准备</span></div></div>
+<div class="loading" id="loading"><div><strong id="loadTitle">正在构建地图</strong><span id="loadStage">准备</span></div></div>
 
-<!-- the scene script registers itself through defineScene(); the engine module runs after it -->
-<script>window.defineScene = function (fn) { window.__scene = fn; };</script>
-<script src="scene.js"></script>
+<section class="menu" id="menu" hidden aria-labelledby="menuTitle">
+  <div class="menu-inner">
+    <header class="menu-head">
+      <h2 id="menuTitle">原野</h2>
+      <p>选一张地图。每张都是一份场景脚本，现场生成。</p>
+    </header>
+    <ul class="map-list" id="mapList"></ul>
+    <button type="button" class="chip menu-close" id="menuClose" hidden>返回当前地图</button>
+  </div>
+</section>
+
+<!-- scene scripts register through defineScene(fn) under the id being loaded; maps.js lists the start-screen
+     maps; the engine module runs after both -->
+<script>
+  window.__scenes = {}; window.__scenePending = 'scene';
+  window.defineScene = function (fn) { window.__scenes[window.__scenePending] = fn; };
+  window.defineMaps = function (list) { window.__maps = list; };
+</script>
+<script src="maps.js"></script>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

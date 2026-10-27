@@ -9,6 +9,7 @@ export const VIEWS = [['正常', 0], ['坡度', 1], ['等高', 2], ['侵蚀', 3]
 
 export const stage = t => { $('loadStage').textContent = t; };
 export const hideLoading = () => $('loading').classList.add('done');
+export const showLoading = title => { $('loadTitle').textContent = title; stage('准备'); $('loading').classList.remove('done'); };
 
 export function renderReport(r, view, onView) {
   const dot = $('statusDot');

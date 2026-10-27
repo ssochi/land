@@ -55,7 +55,7 @@ await page.route('**/*', route => {
   if (!f || !existsSync(f)) return route.abort();
   return route.fulfill({ body: readFileSync(f), contentType: TYPES[extname(f)] || 'application/octet-stream' });
 });
-await page.goto(ORIGIN + '/');
+await page.goto(ORIGIN + '/?scene');   // build the chosen scene directly, no start screen
 await page.waitForFunction('window.__mapReady === true', null, { timeout: 600000, polling: 500 });
 const report = await page.evaluate('mapEditor.report()');
 await page.evaluate('mapEditor.pause(true)');

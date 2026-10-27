@@ -18,8 +18,12 @@ import { CALL, validate } from './schema.js';
 
 export class SceneError extends Error {}
 
-// first scene.js frame in a stack trace (the page loads the script as scene.js, or tags it via sourceURL)
-export const sceneLine = st => { const m = /scene\.js:(\d+):\d+/.exec(st || ''); return m ? +m[1] : null; };
+// first frame of the scene script in a stack trace. The page loads it as scene.js (or tags it via sourceURL);
+// a map from the start screen is loaded from its own file (scenes/village.js…), set with setSceneFile. The
+// whole relative path is matched, so an engine module with the same base name (src/objects/village.js) is not.
+let sceneRe = /scene\.js:(\d+):\d+/;
+export function setSceneFile(file) { sceneRe = new RegExp(file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ':(\\d+):\\d+'); }
+export const sceneLine = st => { const m = sceneRe.exec(st || ''); return m ? +m[1] : null; };
 
 // session: { report, cameras, env, name } — mutated by the calls
 export function makeAPI(session) {

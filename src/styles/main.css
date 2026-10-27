@@ -132,8 +132,36 @@ body.walking .title, body.walking .icon-btn, body.walking .drawer { visibility: 
 .touch-btns button { width: 60px; height: 60px; border-radius: 50%; color: var(--ink); font: inherit; font-size: 14px; touch-action: none; appearance: none; }
 .touch-btns button[aria-pressed="true"] { color: var(--gold); border-color: rgba(236, 213, 133, 0.55); }
 
+/* start screen: map cards over the live scene, or over a sky-to-meadow gradient before any map is built */
+.menu {
+  position: fixed; inset: 0; z-index: 20; overflow-y: auto; display: grid; place-items: center;
+  padding: calc(28px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(28px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+  background: rgba(10, 22, 20, 0.5); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+body:not(.has-map) .menu { background: linear-gradient(#5f8fb8, #a7cdd6 52%, #78a24f); }
+.menu-inner { width: min(1080px, 100%); display: grid; gap: 22px; }
+.menu-head { text-shadow: 0 1px 16px rgba(20, 40, 30, 0.45); }
+.menu-head h2 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(30px, 5vw, 46px); letter-spacing: 0.32em; line-height: 1.1; }
+.menu-head p { margin: 8px 0 0; font-size: 13px; letter-spacing: 0.06em; color: var(--ink-dim); }
+.map-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.map-card {
+  appearance: none; width: 100%; height: 100%; margin: 0; padding: 0 0 14px; border-radius: 14px; overflow: hidden; cursor: pointer;
+  display: grid; grid-template-rows: auto auto 1fr; gap: 6px; text-align: left; color: var(--ink); font: inherit;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.map-card .thumb { display: block; aspect-ratio: 16 / 9; background: linear-gradient(#7fb0d8, #cfe4ea 58%, #8fbf55); }
+.map-card img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.map-card strong { padding: 6px 14px 0; font-family: var(--font-display); font-size: 18px; font-weight: 500; letter-spacing: 0.12em; }
+.map-card .desc { padding: 0 14px; font-size: 12px; line-height: 1.65; color: var(--ink-dim); }
+.map-card:hover { transform: translateY(-2px); border-color: var(--ink-dim); }
+.map-card:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.map-card[aria-current="true"] { border-color: rgba(236, 213, 133, 0.6); }
+.map-card[aria-current="true"] strong::after { content: "当前"; margin-left: 10px; padding: 1px 7px; border-radius: 999px; font-family: var(--font-body); font-size: 11px; letter-spacing: 0.08em; vertical-align: 3px; color: var(--gold); border: 1px solid rgba(236, 213, 133, 0.55); }
+.menu-close { justify-self: center; }
+.chip.maps-btn { flex: none; }
+
 @media (max-width: 640px) {
   .drawer { top: calc(60px + env(safe-area-inset-top, 0px)); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
   .title p { max-width: 60vw; }
 }
-@media (prefers-reduced-motion: reduce) { .loading { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .loading, .map-card { transition: none; } .map-card:hover { transform: none; } }

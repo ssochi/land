@@ -41,10 +41,12 @@
 
 ```bash
 npm install
-npm run dev      # 打开 http://localhost:8000 ，修改 scene.js 后刷新即可
-npm run build    # 生成 dist/index.html：单文件、离线可用，可以直接双击打开
+npm run dev      # 打开 http://localhost:8000 ，在主界面选地图；修改场景脚本后刷新即可
+npm run build    # 生成 dist/index.html：所有地图打进一个单文件，离线可用，可以直接双击打开
 ```
 
+- 打开页面先进入主界面，列出 [`maps.js`](maps.js) 里的地图（镜湖原野、哈特诺式山村和四个对照场景），点卡片现场生成。底部栏的「地图」按钮（或按 M）随时回到主界面，Esc 返回当前地图。地址里的 `?map=<id>`（例如 `?map=hateno`）直接进入某张地图，刷新后还在同一张。
+- 加一张地图：写一份调用 `defineScene` 的场景脚本，在 `maps.js` 里登记 `id`、文件、标题、简介和预览镜头，再用 `node tools/thumbs.mjs <id>` 渲染预览图。
 - 拖动旋转视角，滚轮缩放，鼠标划过草地会拨开草叶。
 - 底部栏切换镜头，调节时刻和风力。
 - 右上角「构建报告」里有每次调用的执行记录、调试视图（坡度、等高、侵蚀、离水距离、汇流），以及完整的脚本 API 参考。
@@ -160,10 +162,16 @@ node tools/render.mjs hero lake river
 node tools/render.mjs '{"name":"close","at":[-12,-22],"eye":2,"look":[-5,-30],"lookEye":4}' \
   --eval "mapEditor.heightAt(15, -80)" --view 5
 
-# 换一份场景脚本，或者渲染打包后的单文件
+# 换一份场景脚本、打开主界面上的某张地图，或者渲染打包后的单文件
 node tools/render.mjs --scene my-scene.js --out out/my-scene
-node tools/render.mjs --page dist/index.html
+node tools/render.mjs --map hateno
+node tools/render.mjs --page dist/index.html --map jinghu
+
+# 重新渲染主界面的地图预览图（docs/maps/*.jpg）
+node tools/thumbs.mjs [id ...]
 ```
+
+`--scene` 让页面跳过主界面直接构建这份脚本（`?scene`）；`--map` 和主界面一样按 `maps.js` 打开地图（`?map=id`）。`node tools/build.mjs --scene file` 打出只含一份场景、没有主界面的单文件。
 
 输出目录（默认 `out/`）里有每个镜头的 PNG 和 `report.json`。构建出错时进程以非零状态退出。
 
@@ -184,7 +192,7 @@ node tools/compare.mjs my.jpg --scene scene.js --camera hero    # 任意参考�
 | 命令 | 作用 |
 | --- | --- |
 | `npm run dev` | 本地静态服务，直接加载 `src/` 下的 ES 模块 |
-| `npm run build` | 用 esbuild 打包成 `dist/index.html`（three.js、样式、场景脚本全部内联） |
+| `npm run build` | 用 esbuild 打包成 `dist/index.html`（three.js、样式、所有地图的场景脚本和预览图全部内联） |
 | `npm test` | Node 内置测试：核心算法、参数校验，以及示例场景的端到端生成 |
 | `npm run lint` | ESLint |
 | `npm run check` | lint + test + build，CI 跑的就是这一套 |
@@ -195,6 +203,7 @@ three.js 版本由 `package.json` 锁定，开发和打包都从 `node_modules` 
 ## 架构
 
 ```
+maps.js             主界面上的地图列表（id、场景脚本、标题、简介、预览图）
 scene.js            示例场景「镜湖原野」
 scenes/village.js   示例场景「哈特诺式山村」
 index.html          页面骨架（开发入口）
@@ -213,10 +222,11 @@ tools/
   render.mjs        无头构建 / 出图 / 查询
   compare.mjs       和参考截图并排对比，输出指标表
   fetch-refs.mjs    下载参考截图
+  thumbs.mjs        渲染主界面的地图预览图
 refs/               参考截图来源与对照配置（sources.json）
 scenes/ref/         按参考截图构图的对照场景
 test/               node --test
-docs/               截图与架构说明
+docs/               截图、地图预览图（docs/maps/）与架构说明
 ```
 
 依赖只能自上而下：`core → world → terrain / water / objects → runtime → render → app`。`runtime` 及以下不碰 DOM 和 WebGL，所以整套世界生成可以在 Node 里运行和测试。模块划分、构建流程和扩展方式（新增脚本操作、新增模型）见 [docs/architecture.md](docs/architecture.md)。

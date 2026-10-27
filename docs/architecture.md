@@ -29,6 +29,16 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称�
 - 世界状态是模块级单例（网格、标量场、实例列表），每次构建前由 `runtime/generate.js` 的 `resetWorld()` 统一清空；每个持有状态的模块都导出自己的 `reset*()`。
 - 惰性派生数据靠版本号失效：地形修改调用 `terrainChanged()`，汇流（`ensureFlow`）和融合高度（`currentB`）在下次查询时按 `world.terrainVer` 重算，水体场看 `world.waterDirty`。
 
+## 页面启动与地图
+
+`index.html` 先定义两个全局函数再加载 `maps.js`：`defineMaps(list)` 收下主界面的地图列表，`defineScene(fn)` 把场景函数登记在 `window.__scenes[当前加载的 id]` 下。`src/main.js` 按地址决定怎么开始：
+
+- `?map=<id>`：按 `maps.js` 加载那张地图的脚本（动态插入 `<script>`，或在打包页面里直接取已内联的函数），然后构建；
+- `?scene`：跳过主界面，构建页面旁边的 `scene.js`（`tools/render.mjs` 和 `compare.mjs` 用这个，`--scene` 指定的文件就以 `scene.js` 的名字提供）；
+- 都没有：显示主界面（`src/app/maps.js`），点卡片加载并构建，同时把 `?map=<id>` 写进地址。
+
+构建报告的行号取调用栈里场景脚本那一帧：从主界面打开的地图用 `setSceneFile(文件)` 换成按它自己的相对路径匹配（`scenes/village.js`，不会误认 `src/objects/village.js`）。打包时 `tools/build.mjs` 把每张地图的脚本内联成一段 `<script>`，前面先设好 `__scenePending = id`，末尾带 `//# sourceURL=<原文件>`；预览图转成 data URL。
+
 ## 一次构建
 
 `app/editor.js` 的 `build(fn)`：
@@ -79,6 +89,7 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称�
 - `schema.test.js`：默认值、必填、类型错误、未知参数告警。
 - `walker.test.js`：第一人称的步行 / 冲刺速度、跳跃高度、悬崖挡路而矮坎能跳上去、飞行与落地、树和墙的碰撞、深水游泳。
 - `features.test.js`：台地的顶面和崖壁坡度、土路找平且不放置物件、树荫规则、河流入湖时水面降到湖面并截断、草场遮罩、崖面上的物件贴着位移后的岩面。
+- `maps.test.js`：`maps.js` 里的 id 唯一、脚本和预览图存在，每张地图都能在 Node 里无错生成、带着登记的预览镜头。
 - `village.test.js`：每种风格和朝向的房屋几何有效、LOD 逐级减面；固定参数后换 seed 模型不变；`flatten` 的 cut 模式只削不填；坡地房屋削坡建台、门前落差有限；`m.village` 可复现、房屋互不重叠、门朝着附近的街。
 - `scene.test.js`：在 Node 里完整生成示例场景，锁定水位、地形范围和每种模型的数量（与浏览器里的报告一致）；以及脚本出错时的行号、调用返回值可被后续调用使用。
 
