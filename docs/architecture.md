@@ -70,7 +70,7 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称�
 
 **新增一种模型**
 
-1. 在 `src/objects/` 写生成器 `makeXxx(seed)`，用 `mesh-builder.js` 的 `MB` 和各种 `add*` 拼网格，返回 `BufferGeometry`。
+1. 在 `src/objects/` 写生成器 `makeXxx(seed)`，返回 `BufferGeometry`。网格用建模工具 `poly/`（基本体 + 倒角、细分、挤出等，`toMB` 烘焙进 `MB`，见 [modeling.md](modeling.md)）或 `mesh-builder.js` 的 `MB` 和各种 `add*` 直接拼。
 2. 在 `src/objects/kinds.js` 的 `KINDS` 登记（变体数、材质族、间距、遮蔽等），在 `KIND_DOCS` 写一句说明。
 3. LOD：生成器接收第二个参数 `lod`（0 最精细），在 `KINDS` 里写 `lod: [d1, d2]` 切换距离（米），需要远处剔除的写 `cull`。`render/props.js` 每帧按距离把实例分到各级的 InstancedMesh 里。
 4. 依赖脚本参数的模型（比如指定尺寸的房屋）用 `customVariant(kind, params)` 换一个 ≥1000 的变体号，生成器的第三个参数就是这份参数。

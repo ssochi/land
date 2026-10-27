@@ -19,6 +19,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../core/math.js';
 import { MB, V3 } from './mesh-builder.js';
+import { Poly, bake, emit } from './poly/index.js';
 
 const C = hex => new THREE.Color(hex);
 const STONE = C('#bfae92'), TIMBER = C('#5e4532'), TIMBER_L = C('#86664a'), IRON = C('#33312e'), GLOW = C('#ffd9a0');
@@ -40,10 +41,29 @@ export function quad(mb, P0, P1, P2, P3, col, card, out, uv0 = [0, 0], sw = 0) {
   if (flip) { mb.tri(ids[0], ids[2], ids[1]); mb.tri(ids[0], ids[3], ids[2]); } else { mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]); }
 }
 
+// While a close-up (lod 0) model is built, boxes and beams come out with chamfered edges (through the modelling
+// toolkit, poly/): the chamfers catch the light and, with weighted normals, shade like the softened edges of real
+// timber and dressed stone, where sharp boxes look machined. withChamfer(on, fn) sets it for one model.
+let CHAMFER = 0;
+export function withChamfer(on, fn) { const prev = CHAMFER; CHAMFER = on ? 1 : 0; try { return fn(); } finally { CHAMFER = prev; } }
+const M4 = new THREE.Matrix4(), CHAMFERED = new Map();   // baked chamfered boxes by size (a house repeats most)
+function chamfered(mb, c, ax, ay, az, sx, sy, sz, col, card) {
+  const key = sx.toFixed(3) + ',' + sy.toFixed(3) + ',' + sz.toFixed(3);
+  let b = CHAMFERED.get(key);
+  if (!b) {
+    const long = sy >= sx && sy >= sz ? V3(0, 1, 0) : sz > sx ? V3(0, 0, 1) : V3(1, 0, 0);   // wood grain along the piece
+    b = bake(Poly.box(sx, sy, sz, { u: long }).bevel({ width: Math.min(0.03, 0.2 * Math.min(sx, sy, sz)), segments: 1 }));
+    if (CHAMFERED.size > 4000) CHAMFERED.clear();
+    CHAMFERED.set(key, b);
+  }
+  emit(mb, b, { at: M4.makeBasis(ax, ay, az).setPosition(c), color: col, card });
+}
+
 // axis-aligned box (rotated by rot about y around its centre); faces get uv in metres (side faces' v from v0);
 // sw goes to aSway (wind sway weight, or the hub height for windmill rotor parts)
 export function box(mb, cx, cy, cz, sx, sy, sz, col, card, rot = 0, topCol = null, sw = 0, v0 = 0) {
   const c = Math.cos(rot), s = Math.sin(rot), hx = sx / 2, hy = sy / 2, hz = sz / 2, uv = [0, v0];
+  if (CHAMFER && !topCol && !sw && !v0 && Math.min(sx, sy, sz) > 0.012) return chamfered(mb, V3(cx, cy, cz), V3(c, 0, s), V3(0, 1, 0), V3(-s, 0, c), sx, sy, sz, col, card);
   const P = (x, y, z) => V3(cx + x * c - z * s, cy + y, cz + x * s + z * c), N = (x, y, z) => V3(x * c - z * s, y, x * s + z * c);
   quad(mb, P(-hx, -hy, hz), P(hx, -hy, hz), P(hx, hy, hz), P(-hx, hy, hz), col, card, N(0, 0, 1), uv, sw);
   quad(mb, P(hx, -hy, -hz), P(-hx, -hy, -hz), P(-hx, hy, -hz), P(hx, hy, -hz), col, card, N(0, 0, -1), uv, sw);
@@ -55,6 +75,7 @@ export function box(mb, cx, cy, cz, sx, sy, sz, col, card, rot = 0, topCol = nul
 
 // box on its own orthonormal axes ax ay az around centre c, sizes along them sx sy sz (u runs along ax)
 export function obox(mb, c, ax, ay, az, sx, sy, sz, col, card) {
+  if (CHAMFER && Math.min(sx, sy, sz) > 0.012) return chamfered(mb, c, ax, ay, az, sx, sy, sz, col, card);
   const P = (x, y, z) => c.clone().addScaledVector(ax, x * sx / 2).addScaledVector(ay, y * sy / 2).addScaledVector(az, z * sz / 2);
   const nx = ax.clone().negate(), ny = ay.clone().negate(), nz = az.clone().negate();
   quad(mb, P(-1, -1, 1), P(1, -1, 1), P(1, 1, 1), P(-1, 1, 1), col, card, az);
@@ -196,7 +217,8 @@ export function houseParams(seed, p = {}) {
     base: p.base || 1.2, lift: p.lift || 0, steps: p.steps || 0 };
 }
 
-export function makeHouse(seed, lod = 0, params = {}) {
+export function makeHouse(seed, lod = 0, params = {}) { return withChamfer(lod === 0, () => buildHouse(seed, lod, params)); }
+function buildHouse(seed, lod, params) {
   const P = houseParams(seed, params), R = mulberry32(seed * 31 + 7), mb = new MB();
   const { style, floors, roof, pitch } = P, gable = P.front === 'gable', hut = style === 'hut';
   // built in a frame with the ridge along x; a gable-front house is turned a quarter at the end so its +x gable
