@@ -4,6 +4,8 @@ export default /* glsl */`
 uniform float uTime; uniform float uWind; uniform vec2 uWindDir;
 uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 uSkyAmb; uniform vec3 uGroundAmb;
 uniform vec3 uFogColor; uniform vec3 uZenith; uniform float uFogDensity; uniform float uDebug;
+uniform float uHazeFar; uniform vec3 uVFog; uniform float uCloudCover; uniform float uGlare; uniform float uNight;
+uniform vec4 uPL[12]; uniform vec3 uPLColor;
 uniform sampler2D uShadowMap; uniform mat4 uShadowMatrix; uniform float uShadowOn; uniform float uShadowTexel;
 uniform sampler2D uHz0; uniform sampler2D uHz1; uniform sampler2D uHzAO; uniform vec2 uHzMin; uniform float uHzSize;
 uniform vec4 uMA0; uniform vec4 uMA1; uniform vec4 uMB0; uniform vec4 uMB1; uniform float uHzW; uniform float uSunTan; uniform float uHzOn;
@@ -33,7 +35,9 @@ float gustAt(vec2 xz) { vec2 w = xz * 0.042 - uWindDir * uTime * (0.7 + uWind * 
 float cloudShadow(vec2 xz) { float c = fbm(xz * 0.0085 + uWindDir * uTime * 0.018 + vec2(3.7, 1.3)); return 1.0 - 0.45 * smoothstep(0.52, 0.68, c); }
 vec3 lighting(vec3 alb, vec3 N, vec3 wp, float sharp) {
   float ndl = dot(N, uSunDir);
-  float diff = smoothstep(-0.12 + sharp * 0.12, 0.5 - sharp * 0.32, ndl);
+  // a soft terminator (the stylised look) blended with a wrapped Lambert falloff, so gentle slopes still
+  // read as lit vs turned-away instead of all saturating to full sun
+  float diff = smoothstep(-0.12 + sharp * 0.12, 0.5 - sharp * 0.32, ndl) * mix(0.7, 1.0, smoothstep(0.0, 0.8, ndl));
   float ts = 1.0, sv = 1.0;
   if (uHzOn > 0.5) {
     vec2 huv = (wp.xz - uHzMin) / uHzSize;
@@ -45,16 +49,38 @@ vec3 lighting(vec3 alb, vec3 N, vec3 wp, float sharp) {
     }
   }
   gShadow = shadowAt(wp, N) * cloudShadow(wp.xz) * ts;
-  vec3 amb = mix(uGroundAmb, uSkyAmb, N.y * 0.5 + 0.5) * mix(0.5, 1.05, sv);
-  return alb * (amb + uSunColor * diff * gShadow);
+  vec3 amb = (mix(uGroundAmb, uSkyAmb, N.y * 0.5 + 0.5) * 1.18 + uGroundAmb * 0.35 * (1.0 - abs(N.y))) * mix(0.6, 1.05, sv);
+  // warm pools of light around lanterns after dusk (soft wrap so the ground and walls both catch it)
+  vec3 pl = vec3(0.0);
+  if (uNight > 0.01) for (int i = 0; i < 12; i++) {
+    if (uPL[i].w <= 0.0) continue;
+    vec3 L = uPL[i].xyz - wp; float d = length(L), att = max(0.0, 1.0 - d / uPL[i].w);
+    pl += uPLColor * att * att * (max(dot(N, L / max(d, 1e-3)), 0.0) * 0.75 + 0.25);
+  }
+  return alb * (amb + uSunColor * diff * gShadow + pl * uNight);
 }
+// height fog + aerial perspective (distant land collapses into a flat haze-coloured silhouette)
+// + an optional valley-fog layer below uVFog.x (thickness uVFog.y, density uVFog.z) broken into drifting banks
 vec3 applyFog(vec3 c, vec3 wp) {
   vec3 dv = wp - cameraPosition; float d = length(dv);
   float hAvg = max(0.5 * (wp.y + cameraPosition.y), 0.0);
-  float f = 1.0 - exp(-d * uFogDensity * exp(-hAvg / 170.0));
+  float f = 1.0 - exp(-d * uFogDensity * exp(-hAvg / 260.0));
+  f = 1.0 - (1.0 - f) * (1.0 - uHazeFar * smoothstep(200.0, 1600.0, d));
   float s = pow(max(dot(dv / d, uSunDir), 0.0), 6.0);
-  vec3 fc = mix(uFogColor, mix(uFogColor, uZenith, 0.4), smoothstep(80.0, 950.0, d) * (1.0 - s * 0.8));
+  // distant land takes a deeper sky blue rather than washing out to the pale horizon colour
+  vec3 fc = mix(uFogColor, mix(uFogColor, uZenith, 0.5) * 0.9, smoothstep(80.0, 950.0, d) * (1.0 - s * 0.8));
   fc = mix(fc, uSunColor * 0.92 + uFogColor * 0.2, s * 0.5);
-  return mix(c, fc, f);
+  c = mix(c, fc, f);
+  if (uVFog.z > 0.0) {
+    float H = uVFog.y, dy = dv.y;
+    float k = abs(dy) > 0.05 ? (1.0 - exp(-dy / H)) / (dy / H) : 1.0;
+    float od = min(uVFog.z * d * exp(-(cameraPosition.y - uVFog.x) / H) * k, 8.0);
+    vec2 q = wp.xz * 0.006 + uWindDir * uTime * 0.012;
+    float bank = smoothstep(0.3, 0.7, vnoise(q) * 0.65 + vnoise(q * 2.7 + 5.2) * 0.35);
+    float fv = 1.0 - exp(-od * (0.1 + 0.9 * bank));
+    vec3 mist = mix(uFogColor, vec3(1.0), 0.3) * (0.85 + 0.25 * max(uSunDir.y, 0.0)) + uSunColor * s * 0.35;
+    c = mix(c, mist, fv);
+  }
+  return c;
 }
 `;

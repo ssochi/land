@@ -16,8 +16,11 @@ export function createPointerPush(canvas, camera) {
   });
   canvas.addEventListener('pointerleave', () => { pointerIn = false; });
   return {
-    update(dt) {
-      pushStrength += ((pointerIn ? 1 : 0) - pushStrength) * Math.min(1, dt * 6);
+    // feet: in first person the grass parts around the walker instead of under the cursor
+    update(dt, feet) {
+      const on = feet ? 1 : pointerIn ? 1 : 0;
+      if (feet) pushTarget.set(feet.x, 0, feet.z);
+      pushStrength += (on - pushStrength) * Math.min(1, dt * 6);
       PUSH.x += (pushTarget.x - PUSH.x) * Math.min(1, dt * 14); PUSH.z += (pushTarget.z - PUSH.z) * Math.min(1, dt * 14); PUSH.w = pushStrength;
     }
   };

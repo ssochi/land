@@ -9,6 +9,7 @@ export const VIEWS = [['正常', 0], ['坡度', 1], ['等高', 2], ['侵蚀', 3]
 
 export const stage = t => { $('loadStage').textContent = t; };
 export const hideLoading = () => $('loading').classList.add('done');
+export const showLoading = title => { $('loadTitle').textContent = title; stage('准备'); $('loading').classList.remove('done'); };
 
 export function renderReport(r, view, onView) {
   const dot = $('statusDot');
@@ -41,7 +42,7 @@ export function renderReport(r, view, onView) {
 export function markView(v) { document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.view === v))); }
 
 function renderSchema() {
-  const order = ['noise', 'mountains', 'peak', 'hill', 'flatten', 'smooth', 'erode', 'apply', 'river', 'lake', 'scatter', 'place', 'grass', 'env', 'camera'];
+  const order = ['noise', 'mountains', 'peak', 'hill', 'flatten', 'plateau', 'terrace', 'smooth', 'erode', 'thermal', 'apply', 'river', 'lake', 'path', 'village', 'building', 'fence', 'field', 'scatter', 'place', 'grass', 'env', 'camera'];
   $('paneSchema').innerHTML = `<p class="lead">场景写在 <code>scene.js</code> 里：<code>defineScene((m) =&gt; { … })</code>。每个调用都立即执行，后面的代码能马上查询结果；出错时报告会给出行号。下面列出参数，缺省取默认值，写错参数名会收到警告。</p>
 <pre class="api">defineScene((m) =&gt; {
   const t = m.terrain;
@@ -84,13 +85,28 @@ mapEditor.camera(name | {pos, target} | {at, eye, look, lookEye})
 mapEditor.view(0..5)          // 正常/坡度/等高/侵蚀/离水/汇流
 mapEditor.pause(true)         // 暂停动画循环（无头渲染用）
 mapEditor.step(sec)           // 推进风与风痕
-mapEditor.snapshot()          // 渲染一帧并返回 PNG dataURL</pre>`;
+mapEditor.snapshot()          // 渲染一帧并返回 PNG dataURL
+mapEditor.walk({ x, z, yaw, pitch, fly })   // 进入第一人称（参数都可省略）
+mapEditor.input({ forward, right, sprint, up, down, jump, fly })  // 模拟按键；jump / fly 为单次触发
+mapEditor.player()            // 位置、速度、是否着地 / 飞行 / 游泳
+mapEditor.orbit()             // 回到环绕镜头</pre>
+<p class="lead">第一人称：<code>V</code> 切换，<code>WASD</code> 移动，<code>Shift</code> 冲刺，<code>空格</code> 跳跃，<code>F</code> 或双击空格飞行（空格上升、<code>C</code> 下降），点击画面锁定鼠标，<code>Esc</code> 释放。</p>`;
 }
 
 export function renderCams(presets, onSelect) {
   $('cams').innerHTML = presets.map(c => `<button type="button" class="chip" data-cam="${esc(c.name)}" aria-pressed="false">${esc(c.label || c.name)}</button>`).join('');
   $('cams').querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => onSelect(b.dataset.cam)));
 }
+
+export function setWalkMode(on, touch) {
+  $('walkBtn').setAttribute('aria-pressed', String(on));
+  $('fpHud').hidden = !on; $('touchPad').hidden = !(on && touch);
+  $('fpHint').classList.toggle('touch', !!touch);
+  document.body.classList.toggle('walking', on);
+  if (on) markCam(null);
+}
+
+export function setWalkState(t) { const el = $('fpState'); if (el.textContent !== t) el.textContent = t; }
 
 export function markCam(name) { document.querySelectorAll('#cams .chip').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cam === name))); }
 
@@ -101,8 +117,9 @@ export function setControls(time, wind) { $('todInput').value = time; $('windInp
 export function showTimeOfDay(label, fogHex) { $('todOut').textContent = label; document.body.style.background = '#' + fogHex; }
 
 // static panes, drawer tabs and slider wiring; handlers receive the new slider value
-export function initUI({ onTime, onWind }) {
+export function initUI({ onTime, onWind, onWalk }) {
   renderSchema(); renderApi();
+  $('walkBtn').addEventListener('click', e => { e.currentTarget.blur(); onWalk(); });
   const tabs = [['tabReport', 'paneReport'], ['tabSchema', 'paneSchema'], ['tabApi', 'paneApi']];
   tabs.forEach(([t, p]) => $(t).addEventListener('click', () => tabs.forEach(([t2, p2]) => { $(t2).setAttribute('aria-selected', String(t2 === t)); $(p2).hidden = p2 !== p; })));
   $('reportBtn').addEventListener('click', () => { const d = $('drawer'), open = d.hidden; d.hidden = !open; $('reportBtn').setAttribute('aria-expanded', String(open)); });

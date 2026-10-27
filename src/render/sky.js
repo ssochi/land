@@ -2,6 +2,7 @@
 // Writes alpha 0 so the post pass can tell sky from geometry (god rays).
 import * as THREE from 'three';
 import { mat } from './material.js';
+import { REFLECT } from './layers.js';
 
 const skyMat = mat(`varying vec3 vDir; void main(){ vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`, `
 varying vec3 vDir;
@@ -10,23 +11,37 @@ void main(){
   vec3 d = normalize(vDir); float e = d.y;
   vec3 col = mix(uFogColor, uZenith, pow(smoothstep(-0.02, 0.62, e), 0.75));
   float sd = max(dot(d, uSunDir), 0.0);
-  col += uSunColor * (pow(sd, 10.0) * 0.28 + pow(sd, 90.0) * 0.4);
+  col += uSunColor * (pow(sd, 4.0) * 0.16 * uGlare + pow(sd, 10.0) * 0.28 + pow(sd, 90.0) * 0.4);
+  float cov = 0.0;
   if (e > 0.0) {
-    vec2 uv = d.xz / (e + 0.11) * 0.9 + vec2(uTime * 0.012, uTime * 0.004);
-    float raw = fbm5(uv * 0.55);
-    float cov = smoothstep(0.43, 0.63, raw) * smoothstep(0.015, 0.2, e);
-    float toward = fbm5((uv + uSunDir.xz * 0.22) * 0.55);
-    float lit = smoothstep(0.25, 0.75, clamp(0.55 + (raw - toward) * 5.0, 0.0, 1.0));
-    vec3 cc = mix(mix(uZenith, uFogColor, 0.55) * 0.82 + 0.12, mix(vec3(1.0), uSunColor, 0.35) * 1.02, lit);
-    cc += uSunColor * pow(sd, 14.0) * 0.5 * (1.0 - smoothstep(0.55, 0.85, raw));
-    col = mix(col, cc, cov * 0.95);
+    // scattered fair-weather cumulus: billowy base shape plus detail, lit on the side facing the sun
+    vec2 uv = d.xz / (e + 0.09) * 1.5 + vec2(uTime * 0.02, uTime * 0.006);
+    float detail = fbm5(uv * 2.1 + 4.0);
+    float raw = fbm5(uv * 0.5) * 0.72 + detail * 0.28;
+    float th = mix(0.66, 0.44, uCloudCover);
+    cov = smoothstep(th, th + 0.07, raw) * smoothstep(0.015, 0.14, e);
+    float toward = fbm5((uv + uSunDir.xz * 0.35) * 0.5) * 0.72 + detail * 0.28;
+    float lit = smoothstep(0.2, 0.8, clamp(0.6 + (raw - toward) * 6.0, 0.0, 1.0));
+    vec3 shade = mix(mix(uZenith, uFogColor, 0.6) * 0.86 + 0.1, uFogColor, smoothstep(0.25, 0.0, e) * 0.5);
+    vec3 cc = mix(shade, mix(vec3(1.0), uSunColor, 0.3) * 0.98, lit);
+    cc += uSunColor * pow(sd, 8.0) * 0.5 * (1.0 - smoothstep(th, th + 0.25, raw));
+    // after sunset the clouds lose their sunlit side and sink to a slightly darker shade of the sky behind
+    // them, with a faint warm rim toward where the sun went down
+    vec3 ccN = col * 0.74 + uSunColor * pow(sd, 3.0) * 0.1;
+    col = mix(col, mix(cc, ccN, uNight), cov * 0.97);
   }
   col += uSunColor * smoothstep(0.9993, 0.9997, sd) * 0.9;
+  // stars come out after dusk (fixed to the sky, a few brighter ones), hidden behind clouds
+  if (uNight > 0.0 && e > 0.0) {
+    vec2 sp = d.xz / (e + 0.25) * 220.0; vec2 cellS = floor(sp); float hS = hash12(cellS);
+    float star = step(0.985, hS) * smoothstep(0.35, 0.0, length(fract(sp) - 0.5)) * (0.4 + 0.6 * hash12(cellS + 7.0));
+    col += vec3(0.85, 0.9, 1.0) * star * uNight * smoothstep(0.02, 0.2, e) * (1.0 - cov);
+  }
   gl_FragColor = vec4(col, 0.0);
 }`, null, { side: THREE.BackSide, depthWrite: false });
 
 export function createSky(scene) {
   const sky = new THREE.Mesh(new THREE.SphereGeometry(3000, 48, 24), skyMat);
-  sky.renderOrder = -10; sky.frustumCulled = false; scene.add(sky);
+  sky.renderOrder = -10; sky.frustumCulled = false; sky.layers.enable(REFLECT); scene.add(sky);
   return sky;
 }

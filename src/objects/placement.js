@@ -2,10 +2,11 @@
 import { mulberry32 } from '../core/math.js';
 import { fbm } from '../core/noise.js';
 import { DETAIL, FAR, heightAt, slopeAt, stampGrid } from '../world/grid.js';
-import { OCC, FOREST_D, FOREST_F, waterLevelAt, waterDistAt, moistureAt, sunAt } from '../world/fields.js';
-import { KINDS } from './kinds.js';
+import { OCC, FOREST_D, FOREST_F, waterLevelAt, waterDistAt, moistureAt, sunAt, pathAt, tillAt } from '../world/fields.js';
+import { KINDS, kindGeo } from './kinds.js';
+import { groundAt } from '../terrain/crag.js';
 
-export const INST = {};        // 'kind|variant|lo' -> [{ x, y, z, s, r, tilt }]
+export const INST = {};        // 'kind|variant' -> [{ x, y, z, s, r, tilt }] (the renderer picks each instance's LOD)
 const OBST = new Map();        // spatial hash (4m cells) -> [{ x, z, r }]: trunks and rocks that block later placements
 
 export function resetPlacement() { for (const k in INST) delete INST[k]; OBST.clear(); }
@@ -20,6 +21,27 @@ export function obstHit(x, z, r) {
     for (const o of l) if ((o.x - x) ** 2 + (o.z - z) ** 2 < (o.r + r) ** 2) return true;
   }
   return false;
+}
+
+// calls fn(x, z, r) for every obstacle circle (used to keep grass out of trunks, rocks and masonry)
+export function forEachObstacle(fn) { for (const l of OBST.values()) for (const o of l) fn(o.x, o.z, o.r); }
+
+// move a circle of radius r at (x, z) out of every obstacle it overlaps (a few relaxation passes)
+export function obstPush(x, z, r) {
+  for (let it = 0; it < 3; it++) {
+    let moved = false;
+    const R = Math.ceil((r + 8) / 4), cx = Math.floor(x / 4), cz = Math.floor(z / 4);
+    for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) {
+      const l = OBST.get((cx + a + 1000) * 4096 + (cz + b + 1000)); if (!l) continue;
+      for (const o of l) {
+        const dx = x - o.x, dz = z - o.z, m = o.r + r, d2 = dx * dx + dz * dz;
+        if (d2 >= m * m) continue;
+        const d = Math.sqrt(d2) || 1e-4; x = o.x + dx / d * m; z = o.z + dz / d * m; moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return { x, z };
 }
 
 // returns a sampler () => [x, z] for a scatter area; polygon misses return NaN (counted as 'area' rejects)
@@ -37,7 +59,7 @@ function areaSampler(area, R) {
   return () => [DETAIL.min + R() * DETAIL.size, DETAIL.min + R() * DETAIL.size];
 }
 
-export const emptyRejectStats = () => ({ area: 0, water: 0, height: 0, slope: 0, waterDist: 0, moisture: 0, sun: 0, noise: 0, spacing: 0 });
+export const emptyRejectStats = () => ({ area: 0, water: 0, path: 0, height: 0, slope: 0, waterDist: 0, moisture: 0, sun: 0, canopy: 0, noise: 0, spacing: 0 });
 
 // true if (x, z) passes every rule; otherwise increments the failing rule's counter in `stats`
 export function ruleCheck(x, z, rules, stats) {
@@ -45,11 +67,13 @@ export function ruleCheck(x, z, rules, stats) {
   const h = heightAt(x, z);
   const wl = waterLevelAt(x, z);
   if (wl != null && wl > h - 0.05) { stats.water++; return false; }
+  if (pathAt(x, z) > 0.35 || tillAt(x, z) > 0.35) { stats.path++; return false; }   // roads, plazas and ploughed fields
   if (rules.height && (h < rules.height[0] || h > rules.height[1])) { stats.height++; return false; }
   if (rules.slope) { const s = slopeAt(x, z); if (s < rules.slope[0] || s > rules.slope[1]) { stats.slope++; return false; } }
   if (rules.waterDist) { const d = waterDistAt(x, z); if (d < rules.waterDist[0] || d > rules.waterDist[1]) { stats.waterDist++; return false; } }
   if (rules.moisture) { const v = moistureAt(x, z); if (v < rules.moisture[0] || v > rules.moisture[1]) { stats.moisture++; return false; } }
   if (rules.sun) { const v = sunAt(x, z); if (v < rules.sun[0] || v > rules.sun[1]) { stats.sun++; return false; } }
+  if (rules.canopy) { const v = DETAIL.inside(x, z) ? DETAIL.sample(x, z, OCC) / 0.8 : 0; if (v < rules.canopy[0] || v > rules.canopy[1]) { stats.canopy++; return false; } }
   if (rules.noise) { const nz = rules.noise; let v = fbm(x * (nz.scale || 0.05), z * (nz.scale || 0.05), 3, nz.seed || 0); if (nz.invert) v = 1 - v; if (v < (nz.threshold != null ? nz.threshold : 0.5)) { stats.noise++; return false; } }
   return true;
 }
@@ -61,11 +85,14 @@ export function topRejects(stats) {
 
 function addInstance(kind, x, z, s, rot, variant, R) {
   const K = KINDS[kind];
-  const v = variant != null ? variant % K.variants : Math.floor(R() * K.variants);
-  const lo = K.lo && !DETAIL.inside(x, z) && Math.hypot(x, z) > K.lodDist;  // full model anywhere the camera can walk
-  const key = kind + '|' + v + '|' + (lo ? 1 : 0);
-  (INST[key] || (INST[key] = [])).push({ x, z, y: heightAt(x, z) - K.sink * s, s, r: rot, tilt: K.tilt });
-  if (K.trunk) obstAdd(x, z, K.trunk * s);
+  const v = variant != null ? (variant >= 1000 ? variant : variant % K.variants) : Math.floor(R() * K.variants);
+  const key = kind + '|' + v;
+  (INST[key] || (INST[key] = [])).push({ x, z, y: groundAt(x, z) - K.sink * s, s, r: rot, tilt: K.tilt });   // on the drawn (craggy) ground
+  if (K.colliders) {
+    // footprint circles in model space, rotated like the instance (three.js Y rotation)
+    const c = Math.cos(rot), sn = Math.sin(rot);
+    for (const [lx, lz, r] of kindGeo(kind, v).userData.colliders) obstAdd(x + (lx * c + lz * sn) * s, z + (-lx * sn + lz * c) * s, r * s);
+  } else if (K.trunk) obstAdd(x, z, K.trunk * s);
   if (K.occ && DETAIL.inside(x, z)) stampGrid(DETAIL, OCC, x, z, K.canopy * s, K.occ, 0.8);
   if (K.forest) { stampGrid(FAR, FOREST_F, x, z, K.canopy * s * 1.7, 0.4, 1); if (DETAIL.inside(x, z)) stampGrid(DETAIL, FOREST_D, x, z, K.canopy * s * 1.5, 0.35, 1); }
 }
@@ -103,6 +130,13 @@ export function opScatter(p, rep) {
   rep.data = { placed, requested: p.count, rejected: stats };
   if (placed < p.count * 0.6) { rep.status = 'warn'; rep.note += ' · 放置不足六成，放宽规则或扩大区域'; }
   return { placed, requested: p.count, rejected: stats, positions };
+}
+
+// place one instance without rules (village layout, fences, fields): returns false for an unknown kind
+export function placeKind(kind, x, z, { rotation = 0, scale = 1, variant = null } = {}) {
+  if (!KINDS[kind]) return false;
+  addInstance(kind, x, z, scale, rotation, variant, mulberry32(Math.round(x * 131 + z * 71)));
+  return true;
 }
 
 export function opPlace(p, rep) {

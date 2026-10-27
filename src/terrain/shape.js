@@ -56,9 +56,16 @@ export function peak(p) {
   });
 }
 
+// distance from (cx, cz) with the outline warped by up to `warp` metres of low-frequency noise
+function warpedDist(x, z, cx, cz, radius, warp, seed) {
+  if (!warp) return Math.hypot(x - cx, z - cz);
+  const s = 1.3 / radius;
+  return Math.hypot(x - cx + (fbm(x * s, z * s, 3, seed + 31) - 0.5) * warp * 2, z - cz + (fbm(x * s + 7.3, z * s - 2.9, 3, seed + 32) - 0.5) * warp * 2);
+}
+
 export function hill(p) {
   eachCell((x, z, h) => {
-    const d = Math.hypot(x - p.x, z - p.z) / p.radius;
+    const d = warpedDist(x, z, p.x, p.z, p.radius, p.warp, p.seed) / p.radius;
     let w;
     if (p.shape === 'smooth') w = d < 1 ? smooth(1, 0, d) : 0;
     else if (p.shape === 'plateau') w = smooth(1, 0.55, d);
@@ -67,11 +74,35 @@ export function hill(p) {
   });
 }
 
+// mode 'cut' only lowers ground above the target (a shelf cut into a slope), 'fill' only raises ground below it
 export function flatten(p) {
   eachCell((x, z, h) => {
-    const d = Math.hypot(x - p.x, z - p.z);
+    if ((p.mode === 'cut' && h <= p.height) || (p.mode === 'fill' && h >= p.height)) return h;
+    const d = warpedDist(x, z, p.x, p.z, p.radius, p.warp, p.seed);
     const w = smooth(p.radius + p.falloff, p.radius, d) * p.strength;
     return h + (p.height - h) * w;
+  });
+}
+
+// raised table-land with near-vertical walls; `ledges` steps the wall so it reads as layered rock, the top keeps
+// whatever relief was underneath
+export function plateau(p) {
+  eachCell((x, z, h) => {
+    const d = warpedDist(x, z, p.x, p.z, p.radius, p.warp, p.seed);
+    let u = smooth(p.radius + p.cliff, p.radius, d);
+    if (u <= 0) return h;
+    if (p.ledges > 0) { const q = u * (p.ledges + 1), f = Math.floor(q); u = Math.min(1, (f + smooth(0.35, 1, q - f)) / (p.ledges + 1)); }
+    return h + p.height * u;
+  });
+}
+
+// quantise heights into terraces inside a radius: flat treads, steep risers (`sharpness` = riser share of a step)
+export function terrace(p) {
+  eachCell((x, z, h) => {
+    const w = smooth(p.radius + p.falloff, p.radius, Math.hypot(x - p.x, z - p.z));
+    if (w <= 0) return h;
+    const q = h / p.step, f = Math.floor(q);
+    return h + ((f + smooth(1 - p.sharpness, 1, q - f)) * p.step - h) * w;
   });
 }
 

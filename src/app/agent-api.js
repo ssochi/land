@@ -4,6 +4,8 @@ import { ensureWater, waterInfo } from '../water/water.js';
 import { listInstances } from '../objects/placement.js';
 import { KIND_DOCS } from '../objects/kinds.js';
 import { SCHEMA, SIGS } from '../runtime/schema.js';
+import { U } from '../render/uniforms.js';
+import { textureToDataURL } from '../render/texgen.js';
 
 export function installAgentAPI(ed, canvas) {
   window.mapEditor = {
@@ -20,6 +22,15 @@ export function installAgentAPI(ed, canvas) {
     instances: (kind, limit) => listInstances(kind, limit),
     pause: (on) => { ed.paused = on !== false; return ed.paused; },
     step: (sec) => ed.step(sec),
-    snapshot: () => { ed.renderFrame(); return canvas.toDataURL('image/png'); }
+    snapshot: () => { ed.renderFrame(); return canvas.toDataURL('image/png'); },
+    // first person
+    walk: (o) => ed.walk(o),
+    orbit: () => { ed.orbit(); return ed.player(); },
+    input: (o) => ed.setInput(o),
+    player: () => ed.player(),
+    // escape hatch for debugging: the live three.js objects and shared uniforms
+    debug: { renderer: ed.renderer, scene: ed.scene, camera: ed.camera, controls: ed.controls, uniforms: U, world: () => ed.worldGroup(),
+      // baked material textures as PNG data URLs: { rock: { albedo, normal }, sward: …, dirt: … }
+      textures: () => Object.fromEntries(Object.entries(ed.textures).map(([k, t]) => [k, { albedo: textureToDataURL(ed.renderer, t.targets[0]), normal: textureToDataURL(ed.renderer, t.targets[1]) }])) }
   };
 }

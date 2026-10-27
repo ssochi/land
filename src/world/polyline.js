@@ -1,4 +1,4 @@
-// Polyline helpers for river paths (points are THREE.Vector2 with .y holding world z).
+// Polyline helpers for river and path routes (points are THREE.Vector2 with .y holding world z).
 import * as THREE from 'three';
 import { clamp } from '../core/math.js';
 

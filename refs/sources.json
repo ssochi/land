@@ -1,0 +1,129 @@
+{
+  "faron": {
+    "file": "faron.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/1/1d/BotW_Faron_Grasslands.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Faron_Grasslands.png",
+    "scene": "scenes/ref/faron.js",
+    "camera": "ref",
+    "mask": [],
+    "notes": "草坡前景、长苔的石堆和松树、通往远处塔的小路、层层雾化的远山"
+  },
+  "hills": {
+    "file": "hills.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/8/8b/BotW_Hyrule_Field_Korok_5.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Hyrule_Field_Korok_5.png",
+    "scene": "scenes/ref/hills.js",
+    "camera": "ref",
+    "mask": [
+      [
+        0.03,
+        0.03,
+        0.1,
+        0.08
+      ],
+      [
+        0.57,
+        0.46,
+        0.62,
+        0.6
+      ]
+    ],
+    "notes": "起伏草丘的柔和明暗和云影、右侧大阔叶树、石像一排、落叶小路"
+  },
+  "ruins": {
+    "file": "ruins.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/6/62/BotW_Great_Plateau_Ruins.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Great_Plateau_Ruins.png",
+    "scene": "scenes/ref/ruins.js",
+    "camera": "ref",
+    "mask": [],
+    "notes": "日落逆光、白花草地、残墙石柱、逆光大树、远处雾中的台地"
+  },
+  "rocks": {
+    "file": "rocks.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/8/8c/BotW_NS2E_Faron_Grasslands_Promotional_Screenshot.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_NS2E_Faron_Grasslands_Promotional_Screenshot.png",
+    "scene": "scenes/ref/rocks.js",
+    "camera": "ref",
+    "mask": [
+      [
+        0.03,
+        0.03,
+        0.3,
+        0.08
+      ],
+      [
+        0.03,
+        0.13,
+        0.1,
+        0.19
+      ],
+      [
+        0.4,
+        0.43,
+        0.72,
+        1.0
+      ],
+      [
+        0.29,
+        0.9,
+        0.72,
+        0.97
+      ],
+      [
+        0.78,
+        0.68,
+        0.98,
+        0.97
+      ],
+      [
+        0.4,
+        0.77,
+        0.62,
+        0.86
+      ]
+    ],
+    "notes": "傍晚的草坡，两侧是高大的岩壁和岩峰：看岩石的起伏细节、裂隙和冷暖变化"
+  },
+  "hateno": {
+    "file": "hateno.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/1/10/BotW_Hateno_Village.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Hateno_Village.png",
+    "scene": "scenes/village.js",
+    "camera": "overview",
+    "mask": [
+      [
+        0.03,
+        0.03,
+        0.1,
+        0.08
+      ]
+    ],
+    "notes": "从坡上俯看哈特诺村：赭黄灰泥墙、陶土瓦顶、高烟囱和圆塔，房屋顺坡分布，路边路灯，崖壁和远山在雾里"
+  },
+  "hateno-street": {
+    "file": "hateno-street.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/9/90/BotW_Hateno_Village_2.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Hateno_Village_2.png",
+    "scene": "scenes/village.js",
+    "camera": "lane",
+    "mask": [],
+    "notes": "村内街景：塔楼、拱门、风车、白色石灰岩崖、近处的瓦屋顶和挂着布幡的烟囱"
+  },
+  "hateno-house": {
+    "file": "hateno-house.png",
+    "url": "https://cdn.wikimg.net/en/zeldawiki/images/6/62/BotW_Village_Chief%27s_House.png",
+    "page": "https://zeldawiki.wiki/wiki/File:BotW_Village_Chief%27s_House.png",
+    "scene": "scenes/village.js",
+    "camera": "door",
+    "mask": [
+      [
+        0.03,
+        0.03,
+        0.1,
+        0.08
+      ]
+    ],
+    "notes": "近看村长家：赭黄墙面、乱石勒脚、深色木椽和封檐板、带百叶窗和花箱的窗、门上小雨棚、门边壁灯"
+  }
+}

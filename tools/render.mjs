@@ -1,11 +1,13 @@
 // Headless render loop for agents: build a scene, write report.json and one PNG per camera.
 //
-//   node tools/render.mjs [camera ...] [--scene scene.js] [--out out] [--view N] [--size WxH] [--eval "js"]...
+//   node tools/render.mjs [camera ...] [--scene scene.js | --map id] [--out out] [--view N] [--size WxH] [--eval "js"]...
 //                         [--page dist/index.html]
 //
 // Cameras are preset names or JSON specs ('{"name":"close","at":[-12,-22],"eye":2,"look":[-5,-30]}');
 // with none given, every preset in the scene is rendered. By default the source tree is served as-is
 // (index.html + src/ + node_modules), so no build step is needed; --page renders a built bundle instead.
+// --map opens a map from maps.js the way the start screen does (?map=id); otherwise the page builds --scene
+// directly (?scene) and skips the start screen.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve, join, extname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +17,7 @@ import { chromium } from 'playwright';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const { values: opt, positionals: cams } = parseArgs({ allowPositionals: true, options: {
   scene: { type: 'string', default: 'scene.js' },
+  map: { type: 'string' },
   out: { type: 'string', default: 'out' },
   view: { type: 'string', default: '0' },
   size: { type: 'string', default: '1280x760' },
@@ -48,7 +51,7 @@ await page.route('**/*', route => {
 });
 
 const evalJSON = async js => JSON.stringify(await page.evaluate(js));
-await page.goto(ORIGIN + '/');
+await page.goto(ORIGIN + (opt.map ? '/?map=' + encodeURIComponent(opt.map) : '/?scene'));
 try { await page.waitForFunction('window.__mapReady === true', null, { timeout: 600000, polling: 500 }); }
 catch (e) { console.log('TIMEOUT waiting for build', e.message); }
 const report = await page.evaluate('window.mapEditor ? mapEditor.report() : null');
