@@ -5,11 +5,15 @@
 // rounded edge. An edge that is not bevelled but ends at a bevelled vertex gets a point slid along it, so a
 // bevel can stop partway round a vertex (Blender does the same). o.select(a, b, nF, nG) narrows the edges further.
 // Works on manifold meshes with consistent winding (open boundaries are fine; their edges are never bevelled).
-import { Poly, V3 } from './mesh.js';
+import { Poly, V3, DETAIL } from './mesh.js';
 
 Poly.op('bevel', (p, o = {}) => {
-  const width = o.width != null ? o.width : 0.03, segs = Math.max(1, o.segments || 2), round = o.profile !== 'chamfer';
-  const lim = Math.cos((o.angle != null ? o.angle : 40) * Math.PI / 180), P = p.P, F = p.F;
+  const width = o.width != null ? o.width : 0.03;
+  if (width < DETAIL.minBevel) return p;   // a lighter LOD (withDetail): too narrow to see from there
+  const segs = DETAIL.level ? 1 : Math.max(1, o.segments || 2), round = o.profile !== 'chamfer';
+  // a lighter level has coarser curves (fewer lathe segments): raise the angle so their facets, smooth at full
+  // detail, do not start to count as edges
+  const lim = Math.cos(Math.max(o.angle != null ? o.angle : 40, [0, 50, 62][DETAIL.level]) * Math.PI / 180), P = p.P, F = p.F;
   const half = p.half(), N = F.map(f => p.normal(f)), ek = (a, b) => (a < b ? a + ',' + b : b + ',' + a);
   const bev = new Set();
   half.forEach(([fi], dk) => {

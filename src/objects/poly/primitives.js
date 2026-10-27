@@ -1,7 +1,7 @@
 // Primitives (Blender's Add Mesh menu and curve objects) and 2D outline helpers. Every primitive is a closed
 // solid unless said otherwise, centred as noted, with tagged faces so later steps can pick them.
 import * as THREE from 'three';
-import { Poly, V3 } from './mesh.js';
+import { Poly, V3, DETAIL, segsAt } from './mesh.js';
 
 // box centred on the origin; faces tagged px nx py ny pz nz (py is the top)
 Poly.make('box', (sx, sy, sz, attr = {}) => {
@@ -36,6 +36,7 @@ Poly.make('prism', (outline, h, attr = {}, y0 = 0) => {
 // surface of revolution about y: profile [[r, y], …] from bottom to top; points on the axis (r = 0) close the
 // solid with a pole; faces tagged side (and bottom / top for flat caps where the profile runs along the axis)
 Poly.make('lathe', (profile, segs, attr = {}, phase = 0) => {
+  segs = segsAt(segs);
   const p = new Poly(), rings = profile.map(([r, y]) => {
     if (r < 1e-6) return [p.vert([0, y, 0])];
     return Array.from({ length: segs }, (_, i) => { const a = phase + i / segs * Math.PI * 2; return p.vert([Math.cos(a) * r, y, Math.sin(a) * r]); });
@@ -80,7 +81,7 @@ Poly.make('sweep', (path, profile, attr = {}, o = {}) => {
 
 // icosphere of radius r (subdivided icosahedron), for blobs and pebbles
 Poly.make('icosphere', (r, detail = 1, attr = {}) => {
-  const g = new THREE.IcosahedronGeometry(r, detail), pos = g.attributes.position, p = new Poly(), key = new Map();
+  const g = new THREE.IcosahedronGeometry(r, Math.max(0, detail - DETAIL.level)), pos = g.attributes.position, p = new Poly(), key = new Map();
   const id = i => { const v = V3(pos.getX(i), pos.getY(i), pos.getZ(i)), k = v.toArray().map(x => x.toFixed(5)).join(); if (!key.has(k)) key.set(k, p.vert(v)); return key.get(k); };
   for (let i = 0; i < pos.count; i += 3) p.face([id(i), id(i + 1), id(i + 2)], attr);
   g.dispose();
@@ -103,7 +104,7 @@ Poly.prototype.volume = function () {
 // ── 2D outlines ──
 export const area2 = pts => { let a = 0; for (let i = 0; i < pts.length; i++) { const [x0, y0] = pts[i], [x1, y1] = pts[(i + 1) % pts.length]; a += x0 * y1 - x1 * y0; } return a / 2; };
 export const rect2 = (w, h, cx = 0, cy = 0) => [[cx - w / 2, cy - h / 2], [cx + w / 2, cy - h / 2], [cx + w / 2, cy + h / 2], [cx - w / 2, cy + h / 2]];
-export const circle2 = (r, n = 16, cx = 0, cy = 0, phase = 0) => Array.from({ length: n }, (_, i) => { const a = phase + i / n * Math.PI * 2; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; });
+export const circle2 = (r, n = 16, cx = 0, cy = 0, phase = 0) => (n = segsAt(n, 4), Array.from({ length: n }, (_, i) => { const a = phase + i / n * Math.PI * 2; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; }));
 // round the corners of a closed outline with radius r (capped at 45% of the shorter neighbouring side), segs
 // points per corner; segs 1 is a chamfer
 export function fillet2(pts, r, segs = 3) {

@@ -6,7 +6,10 @@
 //   forest   darkens the ground as forest floor
 //   colliders  the geometry's userData.colliders footprint replaces the single trunk circle (walls, towers)
 //   lod      distances (m) where the renderer switches to the next, lighter geometry: make(seed, lod, params)
-//            builds level lod = 0 (full detail, seen up close), 1, 2 …; levels = lod.length + 1
+//            builds level lod = 0 (full detail, seen up close), 1, 2 …; levels = lod.length + 1. Every level must
+//            be the same model (same layout, colours, materials, silhouette) minus detail too small to see from
+//            its distance; the renderer cross-fades levels, and tools/lod-check.mjs measures what changes.
+//            Distances are for desktop GPUs; small screens scale them (LOD.bias in src/render/props.js).
 //   cull     beyond this distance instances are not drawn at all (small plants and props)
 import { makeOak, makeBirch, makePine, makeBush } from './trees.js';
 import { makeDaisy, makePoppy, makeLupine, makeButtercup, makeUmbel } from './flowers.js';
@@ -17,15 +20,15 @@ import { makeHouse } from './buildings.js';
 import { makeFence, makeStoneWall, makeWell, makeLantern, makeBarrel, makeCrate, makeHaybale, makeWoodpile, makeCart, makeSignpost, makeStall, makeWindmill, makeCabbage, makeWheat } from './village-props.js';
 
 const house = style => (s, l, p) => makeHouse(s, l, Object.assign({ style }, p));
-const HOUSE = { mat: 'building', colliders: true, lod: [35, 110], radius: 9, canopy: 4.5, occ: 0.35, sink: 0 };
+const HOUSE = { mat: 'building', colliders: true, lod: [90, 260], radius: 9, canopy: 4.5, occ: 0.35, sink: 0 };
 const PROP = { mat: 'building', colliders: true, sink: 0.02 };
 
 export const KINDS = {
-  'tree.oak':        { make: (s, l) => makeOak(s, false, l), lod: [45, 150], variants: 3, mat: 'tree', radius: 7, canopy: 4.6, occ: 0.5, trunk: 0.6, sink: 0.15 },
-  'tree.big':        { make: (s, l) => makeOak(s, true, l), lod: [60, 190], variants: 2, mat: 'tree', radius: 12, canopy: 7, occ: 0.6, trunk: 1.0, sink: 0.2 },
-  'tree.birch':      { make: (s, l) => makeBirch(s, l), lod: [40, 140], variants: 3, mat: 'tree', radius: 2.5, canopy: 2.0, occ: 0.3, trunk: 0.3, sink: 0.1 },
-  'tree.pine':       { make: (s, l) => makePine(s, l), lod: [55, 200], variants: 3, mat: 'tree', radius: 3, canopy: 2.8, occ: 0.45, trunk: 0.4, sink: 0.2, forest: true },
-  'bush':            { make: (s, l) => makeBush(s, l), lod: [35], cull: 260, variants: 3, mat: 'tree', radius: 1.4, canopy: 1.2, occ: 0.3, trunk: 0.9, sink: 0.15 },
+  'tree.oak':        { make: (s, l) => makeOak(s, false, l), lod: [80, 220], variants: 3, mat: 'tree', radius: 7, canopy: 4.6, occ: 0.5, trunk: 0.6, sink: 0.15 },
+  'tree.big':        { make: (s, l) => makeOak(s, true, l), lod: [100, 280], variants: 2, mat: 'tree', radius: 12, canopy: 7, occ: 0.6, trunk: 1.0, sink: 0.2 },
+  'tree.birch':      { make: (s, l) => makeBirch(s, l), lod: [70, 200], variants: 3, mat: 'tree', radius: 2.5, canopy: 2.0, occ: 0.3, trunk: 0.3, sink: 0.1 },
+  'tree.pine':       { make: (s, l) => makePine(s, l), lod: [110, 260, 520], variants: 3, mat: 'tree', radius: 3, canopy: 2.8, occ: 0.45, trunk: 0.4, sink: 0.2, forest: true },
+  'bush':            { make: (s, l) => makeBush(s, l), lod: [60], cull: 260, variants: 3, mat: 'tree', radius: 1.4, canopy: 1.2, occ: 0.3, trunk: 0.9, sink: 0.15 },
   'flower.daisy':    { make: s => makeDaisy(s), cull: 75, variants: 3, mat: 'flower', radius: 0.12, sink: 0.02, small: true },
   'flower.poppy':    { make: s => makePoppy(s), cull: 75, variants: 3, mat: 'flower', radius: 0.14, sink: 0.02, small: true },
   'flower.lupine':   { make: s => makeLupine(s), cull: 90, variants: 3, mat: 'flower', radius: 0.2, sink: 0.02, small: true },
@@ -47,19 +50,19 @@ export const KINDS = {
   'house.stone':     { make: house('stone'), variants: 4, ...HOUSE },
   'house.timber':    { make: house('timber'), variants: 4, ...HOUSE },
   'house.hut':       { make: house('hut'), variants: 4, ...HOUSE, radius: 6 },
-  'fence.wood':      { make: (s, l) => makeFence(s, l), variants: 4, ...PROP, lod: [30], cull: 220, radius: 1.2 },
-  'fence.stone':     { make: (s, l) => makeStoneWall(s, l), variants: 3, ...PROP, lod: [30], cull: 260, radius: 1.2 },
-  'well':            { make: (s, l) => makeWell(s, l), variants: 2, ...PROP, lod: [30], radius: 4 },
-  'lantern':         { make: (s, l) => makeLantern(s, l), variants: 1, ...PROP, lod: [25], cull: 400, radius: 3 },
-  'barrel':          { make: (s, l) => makeBarrel(s, l), variants: 3, ...PROP, lod: [20], cull: 160, radius: 0.8 },
-  'crate':           { make: (s, l) => makeCrate(s, l), variants: 3, ...PROP, lod: [20], cull: 160, radius: 0.9 },
-  'haybale':         { make: (s, l) => makeHaybale(s, l), variants: 2, ...PROP, lod: [30], cull: 260, radius: 1.4 },
-  'woodpile':        { make: (s, l) => makeWoodpile(s, l), variants: 2, ...PROP, lod: [25], cull: 200, radius: 1.5 },
-  'cart':            { make: (s, l) => makeCart(s, l), variants: 2, ...PROP, lod: [25], cull: 260, radius: 2.5 },
+  'fence.wood':      { make: (s, l) => makeFence(s, l), variants: 4, ...PROP, lod: [50], cull: 220, radius: 1.2 },
+  'fence.stone':     { make: (s, l) => makeStoneWall(s, l), variants: 3, ...PROP, cull: 260, radius: 1.2 },
+  'well':            { make: (s, l) => makeWell(s, l), variants: 2, ...PROP, lod: [60], radius: 4 },
+  'lantern':         { make: (s, l) => makeLantern(s, l), variants: 1, ...PROP, lod: [50], cull: 400, radius: 3 },
+  'barrel':          { make: (s, l) => makeBarrel(s, l), variants: 3, ...PROP, lod: [40], cull: 160, radius: 0.8 },
+  'crate':           { make: (s, l) => makeCrate(s, l), variants: 3, ...PROP, lod: [40], cull: 160, radius: 0.9 },
+  'haybale':         { make: (s, l) => makeHaybale(s, l), variants: 2, ...PROP, lod: [50], cull: 260, radius: 1.4 },
+  'woodpile':        { make: (s, l) => makeWoodpile(s, l), variants: 2, ...PROP, lod: [45], cull: 200, radius: 1.5 },
+  'cart':            { make: (s, l) => makeCart(s, l), variants: 2, ...PROP, lod: [55], cull: 260, radius: 2.5 },
   'signpost':        { make: (s, l) => makeSignpost(s, l), variants: 3, ...PROP, cull: 200, radius: 1 },
-  'stall':           { make: (s, l) => makeStall(s, l), variants: 4, ...PROP, lod: [30], cull: 300, radius: 3 },
-  'windmill':        { make: (s, l) => makeWindmill(s, l), variants: 1, ...PROP, lod: [60, 220], radius: 12, canopy: 3, occ: 0.25 },
-  'crop.wheat':      { make: (s, l) => makeWheat(s, l), variants: 3, mat: 'flower', lod: [22], cull: 130, radius: 0.35, sink: 0.02, small: true },
+  'stall':           { make: (s, l) => makeStall(s, l), variants: 4, ...PROP, lod: [60], cull: 300, radius: 3 },
+  'windmill':        { make: (s, l) => makeWindmill(s, l), variants: 1, ...PROP, lod: [80], radius: 12, canopy: 3, occ: 0.25 },
+  'crop.wheat':      { make: (s, l) => makeWheat(s, l), variants: 3, mat: 'flower', lod: [35], cull: 130, radius: 0.35, sink: 0.02, small: true },
   'crop.cabbage':    { make: s => makeCabbage(s), variants: 2, mat: 'flower', cull: 90, radius: 0.45, sink: 0.02, small: true }
 };
 

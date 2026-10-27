@@ -27,6 +27,16 @@ float shadowAt(vec3 wp, vec3 N) {
   }
   return mix(1.0, s / 9.0, edge);
 }
+// LOD cross-fade (src/render/props.js): while a model swaps level, both levels are drawn for a moment and
+// split the screen's pixels between them by a dither threshold, the old one dissolving as the new one fills
+// in. fade 0: drawn whole; h in (0, 1): the outgoing level, gone where the dither < h; −h: the incoming one,
+// there only where the dither < h — together every pixel is drawn exactly once. Interleaved gradient noise
+// (Jimenez) spreads the kept pixels evenly, so mid-fade reads as a blend rather than a pattern.
+bool lodClip(float fade, vec2 px) {
+  if (fade == 0.0) return false;
+  float d = fract(52.9829189 * fract(dot(px, vec2(0.06711056, 0.00583715))));
+  return fade > 0.0 ? d < fade : d >= -fade;
+}
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
   return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y); }

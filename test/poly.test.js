@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { Poly, fillet2, rect2, circle2, bake } from '../src/objects/poly/index.js';
+import { Poly, fillet2, rect2, circle2, bake, withDetail, DETAIL } from '../src/objects/poly/index.js';
 import { MB } from '../src/objects/mesh-builder.js';
 
 // closed and consistently wound: every directed edge has its reverse, none appears twice; Euler characteristic
@@ -68,6 +68,21 @@ test('inset, extrude, solidify and the deformers', () => {
   const a = Poly.box(0.5, 0.5, 0.5).array(4, new THREE.Vector3(1, 0, 0)); assert.equal(a.F.length, 24); assert.ok(Math.abs(a.bounds().max.x - 3.25) < 1e-9);
   const m = Poly.box(1, 1, 1).translate(1, 0, 0).mirror('x'); assert.ok(Math.abs(m.volume() - 2) < 1e-9, 'mirror keeps the copy outward');
   const wd = Poly.box(1, 1, 1).merge(Poly.box(1, 1, 1)).weld(1e-6); assert.equal(new Set(wd.F.flatMap(f => f.v)).size, 8);
+});
+
+test('withDetail runs the same modelling code lighter: fine bevels go, curves lose segments, solids stay closed', () => {
+  const model = () => Poly.box(1, 0.5, 0.5).bevel({ width: 0.03, segments: 2 }).merge(Poly.cylinder(0.3, 1, 16).bevel({ width: 0.08, segments: 3 }));
+  const full = model(), light = withDetail(1, model), far = withDetail(2, model);
+  assert.equal(DETAIL.level, 0, 'the level is restored afterwards');
+  assert.ok(full.F.length > light.F.length && light.F.length > far.F.length, `${full.F.length} > ${light.F.length} > ${far.F.length}`);
+  for (const [p, n, tol] of [[light, 'detail 1', 0.02], [far, 'detail 2 (a hexagon for the cylinder)', 0.06]]) {
+    const b = p.bounds(), b0 = full.bounds();
+    assert.ok(b.min.distanceTo(b0.min) < tol && b.max.distanceTo(b0.max) < tol, `${n}: same bounds`);
+  }
+  closed(withDetail(1, () => Poly.box(1, 1, 1).bevel({ width: 0.1, segments: 3 })), 'wide bevel kept as one facet');
+  assert.equal(withDetail(1, () => Poly.box(1, 1, 1).bevel({ width: 0.03 })).F.length, 6, 'narrow bevel skipped');
+  assert.equal(withDetail(1, () => Poly.box(1, 1, 1).subdivide({ levels: 2 })).F.length, 24, 'one subdivision level kept');
+  assert.equal(withDetail(1, () => circle2(1, 16)).length, 8);
 });
 
 test('new tools register on Poly and chain with the rest', () => {

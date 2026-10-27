@@ -2,35 +2,18 @@
 // lantern post (a point light after dusk), barrel, crate, hay bale, wood pile, cart, signpost, market stall,
 // windmill (the rotor turns in the vertex shader) and crops. Same conventions as buildings.js: uv in metres,
 // material cards for the prop shader, userData.colliders / lights / smoke.
+// LOD: each prop has one piece of modelling code; its lighter level is the same code run under the toolkit's
+// withDetail (poly/mesh.js: fine bevels skipped, fewer segments), so the levels match in every part, colour
+// and material and the switch is invisible.
 import * as THREE from 'three';
 import { mulberry32 } from '../core/math.js';
 import { MB, V3, addBlob, addPetal } from './mesh-builder.js';
 import { quad, box, beam, withChamfer } from './buildings.js';
-import { Poly, rect2, circle2, fillet2 } from './poly/index.js';
+import { Poly, rect2, circle2, fillet2, withDetail } from './poly/index.js';
 
 const C = hex => new THREE.Color(hex);
 const WOOD = C('#a7825e'), WOOD_D = C('#6b4d36'), IRON = C('#3b3a38'), STONE = C('#b2a796'), GLOW = C('#ffd9a0'), PLASTER = C('#ecdcbc');
 
-// cylinder along axis 'y' (upright), 'x' or 'z' (lying); uv u around, v along; card 7 wood by default
-function cyl(mb, cx, cy, cz, r, h, segs, col, card = 7, axis = 'y', capCol = null) {
-  const pt = (a, t) => axis === 'x' ? V3(cx + t, cy + Math.sin(a) * r, cz + Math.cos(a) * r)
-    : axis === 'z' ? V3(cx + Math.cos(a) * r, cy + Math.sin(a) * r, cz + t) : V3(cx + Math.cos(a) * r, cy + t, cz + Math.sin(a) * r);
-  const radial = a => axis === 'x' ? V3(0, Math.sin(a), Math.cos(a)) : axis === 'z' ? V3(Math.cos(a), Math.sin(a), 0) : V3(Math.cos(a), 0, Math.sin(a));
-  const along = axis === 'x' ? V3(1, 0, 0) : axis === 'z' ? V3(0, 0, 1) : V3(0, 1, 0);
-  for (let i = 0; i < segs; i++) {
-    const a0 = i / segs * Math.PI * 2, a1 = (i + 1) / segs * Math.PI * 2;
-    quad(mb, pt(a0, -h / 2), pt(a1, -h / 2), pt(a1, h / 2), pt(a0, h / 2), col, card, radial((a0 + a1) / 2), [i * r * Math.PI * 2 / segs, 0]);
-  }
-  for (const e of [-1, 1]) {
-    const c = V3(cx, cy, cz).addScaledVector(along, e * h / 2), n = along.clone().multiplyScalar(e), cc = capCol || col;
-    const ctr = mb.v(c.x, c.y, c.z, n.x, n.y, n.z, cc, 0, 0, 0, card);
-    for (let i = 0; i < segs; i++) {
-      const p0 = pt(i / segs * Math.PI * 2, e * h / 2), p1 = pt((i + 1) / segs * Math.PI * 2, e * h / 2);
-      const a = mb.v(p0.x, p0.y, p0.z, n.x, n.y, n.z, cc, 0, p0.x + p0.y, p0.z + p0.y, card), b = mb.v(p1.x, p1.y, p1.z, n.x, n.y, n.z, cc, 0, p1.x + p1.y, p1.z + p1.y, card);
-      if (p1.clone().sub(p0).cross(c.clone().sub(p0)).dot(n) > 0) mb.tri(a, b, ctr); else mb.tri(a, ctr, b);
-    }
-  }
-}
 const geo = (mb, ud) => { const g = mb.geo(); g.userData = Object.assign({ colliders: [], lights: [], smoke: [] }, ud); return g; };
 
 // toolkit helpers (poly/): bake a part, and a squared timber from A to B (w across `up`, d along the side),
@@ -55,33 +38,30 @@ function post(mb, x, z, w, y0, y1, col, R, lean = 0) {
 const hoop = (r, y, w, t, segs = 20) => Poly.sweep(circle2(r, segs).map(([x, z]) => V3(x, y, z)), rect2(t, w), {}, { closed: true });
 
 // one fence span along x from −1.2 to 1.2 (post at the start; the next span supplies the end post)
-export function makeFence(seed, lod = 0) {
+export const makeFence = (seed, lod = 0) => withDetail(lod, () => fence(seed));
+function fence(seed) {
   const R = mulberry32(seed), mb = new MB(), lean = (R() - 0.5) * 0.05;
-  if (lod === 0) {
-    post(mb, -1.2, 0, 0.14, -0.1, 1.25, WOOD_D, R, lean);
-    for (const y of [0.45, 0.95]) { const dy = (R() - 0.5) * 0.04; timber(mb, V3(-1.27, y + dy, 0.095), V3(1.2, y - dy, 0.095), 0.12, 0.05, WOOD.clone().multiplyScalar(0.85 + R() * 0.2), R, Y, { sag: 0.015 }); }
-  } else {
-    box(mb, -1.2, 0.55, 0, 0.14, 1.3, 0.14, WOOD_D, 7, lean);
-    for (const y of [0.45, 0.95]) box(mb, 0, y + (R() - 0.5) * 0.04, 0.095, 2.42, 0.12, 0.05, WOOD.clone().multiplyScalar(0.85 + R() * 0.2), 7, (R() - 0.5) * 0.015);
-  }
+  post(mb, -1.2, 0, 0.14, -0.1, 1.25, WOOD_D, R, lean);
+  for (const y of [0.45, 0.95]) { const dy = (R() - 0.5) * 0.04; timber(mb, V3(-1.27, y + dy, 0.095), V3(1.2, y - dy, 0.095), 0.12, 0.05, WOOD.clone().multiplyScalar(0.85 + R() * 0.2), R, Y, { sag: 0.015 }); }
   return geo(mb, { colliders: [[-1.2, 0, 0.18], [-0.6, 0, 0.18], [0, 0, 0.18], [0.6, 0, 0.18]] });
 }
 
 // low dry-stone wall span: lumpy stones (rounded by a creased subdivision, then knocked out of shape) in courses
-export function makeStoneWall(seed, lod = 0) {
-  const R = mulberry32(seed), mb = new MB(), sc = lod ? 1.6 : 1;
-  for (let y = 0.12, row = 0; y < 0.8; y += 0.24 * sc, row++) for (let x = -1.2 + (row % 2) * 0.18 * sc; x < 1.2; x += (0.35 + R() * 0.25) * sc) {
-    const sx = (0.3 + R() * 0.25) * sc, sy = 0.22 * sc + R() * 0.06, sz = 0.55 - y * 0.2, col = STONE.clone().multiplyScalar(0.8 + R() * 0.3), rot = (R() - 0.5) * 0.1;
-    if (lod) { box(mb, x + sx / 2, y, (R() - 0.5) * 0.06, sx, sy, sz, col, 3, rot); continue; }
+export const makeStoneWall = (seed, lod = 0) => withDetail(lod, () => stoneWall(seed));
+function stoneWall(seed) {
+  const R = mulberry32(seed), mb = new MB();
+  for (let y = 0.12, row = 0; y < 0.8; y += 0.24, row++) for (let x = -1.2 + (row % 2) * 0.18; x < 1.2; x += 0.35 + R() * 0.25) {
+    const sx = 0.3 + R() * 0.25, sy = 0.22 + R() * 0.06, sz = 0.55 - y * 0.2, col = STONE.clone().multiplyScalar(0.8 + R() * 0.3), rot = (R() - 0.5) * 0.1;
     const p = Poly.box(sx + 0.04, sy + 0.04, sz, {}).subdivide({ levels: 1, sharp: 30, crease: 0.45 }).jitter(0.025, 4, R() * 100);
     put(mb, p, col, 3, { at: M.makeRotationY(rot).setPosition(x + sx / 2, y, (R() - 0.5) * 0.06) });
   }
   return geo(mb, { colliders: [[-1.2, 0, 0.4], [-0.4, 0, 0.4], [0.4, 0, 0.4]] });
 }
 
-export function makeWell(seed, lod = 0) {
+export const makeWell = (seed, lod = 0) => withDetail(lod, () => well(seed));
+function well(seed) {
   const R = mulberry32(seed), mb = new MB();
-  if (lod === 0) {
+  {
     // two courses of rounded dressed blocks, staggered, under a coping ring
     for (let c = 0; c < 2; c++) for (let i = 0, n = 12; i < n; i++) {
       const a = (i + c * 0.5) / n * Math.PI * 2, blk = Poly.box(0.5, 0.36, 0.38).bevel({ width: 0.045, segments: 2 }).jitter(0.015, 4, R() * 100);
@@ -98,32 +78,22 @@ export function makeWell(seed, lod = 0) {
     const bucket = Poly.lathe([[0, 0], [0.15, 0], [0.17, 0.24], [0.15, 0.24], [0.135, 0.04], [0, 0.04]], 12).bevel({ width: 0.008, segments: 1 });
     put(mb, bucket, WOOD, 7, { at: M.makeTranslation(0.25, 1.2, 0) });
     put(mb, hoop(0.165, 1.37, 0.03, 0.01, 12), IRON, 0); box(mb, 0.25, 1.75, 0, 0.02, 0.5, 0.02, IRON, 0);   // hoop, rope
-    return geo(mb, { colliders: [[0, 0, 1.25]] });
   }
-  for (let i = 0, segs = 8; i < segs; i++) {
-    const a = i / segs * Math.PI * 2, r = 0.95;
-    box(mb, Math.cos(a) * r, 0.42, Math.sin(a) * r, 0.36, 0.84, 0.48, STONE.clone().multiplyScalar(0.85 + R() * 0.25), 2, -a + Math.PI / 2);
-  }
-  box(mb, 0, 0.1, 0, 1.5, 0.2, 1.5, C('#1d2a30'), 0);
-  for (const s of [-1, 1]) box(mb, s * 1.05, 1.2, 0, 0.14, 2.0, 0.14, WOOD_D, 7);
-  box(mb, 0, 2.15, 0, 2.4, 0.12, 0.12, WOOD_D, 7);
-  quad(mb, V3(-1.4, 2.25, -0.9), V3(1.4, 2.25, -0.9), V3(1.4, 2.75, 0), V3(-1.4, 2.75, 0), C('#a57d64'), 5, V3(0, 1, -1));
-  quad(mb, V3(1.4, 2.25, 0.9), V3(-1.4, 2.25, 0.9), V3(-1.4, 2.75, 0), V3(1.4, 2.75, 0), C('#a57d64'), 5, V3(0, 1, 1));
   return geo(mb, { colliders: [[0, 0, 1.25]] });
 }
 
 // Hateno lamp post: a slender pole on two crossed braces, a lantern hanging from a short arm, a pale pennant
-export function makeLantern(seed, lod = 0) { return withChamfer(lod === 0, () => lanternPost(seed, lod)); }
-function lanternPost(seed, lod) {
+export const makeLantern = (seed, lod = 0) => withChamfer(lod === 0, () => withDetail(lod, () => lanternPost(seed)));
+function lanternPost(seed) {
   const R = mulberry32(seed), mb = new MB(), lean = (R() - 0.5) * 0.06, top = 2.95;
   const T = V3(lean, top, 0);
   beam(mb, V3(0, -0.3, 0), T, 0.11, WOOD_D);
-  if (lod < 2) for (const s of [-1, 1]) beam(mb, V3(s * 0.55, -0.15, s * 0.18), V3(lean * 0.3, 0.95, 0), 0.08, WOOD_D);
+  for (const s of [-1, 1]) beam(mb, V3(s * 0.55, -0.15, s * 0.18), V3(lean * 0.3, 0.95, 0), 0.08, WOOD_D);
   beam(mb, V3(lean - 0.04, top - 0.18, 0), V3(lean + 0.46, top - 0.18, 0), 0.06, WOOD_D);
   const lx = lean + 0.4, ly = top - 0.5;
   box(mb, lx, ly, 0, 0.18, 0.26, 0.18, GLOW, 11);
   box(mb, lx, ly - 0.15, 0, 0.22, 0.04, 0.22, IRON, 0);
-  if (lod === 0) {
+  {
     put(mb, Poly.box(0.28, 0.02, 0.28).extrude('py', 0.1).warp(q => { if (q.y > 0.05) { q.x *= 0.15; q.z *= 0.15; } }), IRON, 0, { at: M.makeTranslation(lx, ly + 0.14, 0) });   // hipped cap
     beam(mb, V3(lx, ly + 0.24, 0), V3(lx, top - 0.2, 0), 0.02, IRON, 0);
     for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) box(mb, lx + sx * 0.09, ly, sz * 0.09, 0.025, 0.27, 0.025, IRON, 0);
@@ -131,15 +101,15 @@ function lanternPost(seed, lod) {
     const c = C('#efe6d2');
     quad(mb, V3(lean - 0.05, top - 0.02, 0), V3(lean - 0.42, top - 0.1, 0.02), V3(lean - 0.42, top - 0.3, 0.02), V3(lean - 0.05, top - 0.34, 0), c, 0, V3(0, 0, 1));
     quad(mb, V3(lean - 0.05, top - 0.02, 0), V3(lean - 0.05, top - 0.34, 0), V3(lean - 0.42, top - 0.3, 0.02), V3(lean - 0.42, top - 0.1, 0.02), c, 0, V3(0, 0, -1));
-  } else box(mb, lx, ly + 0.16, 0, 0.24, 0.05, 0.24, IRON, 0);
+  }
   return geo(mb, { colliders: [[0, 0, 0.2]], lights: [[lx, ly - 0.05, 0, 9]] });
 }
 
 // barrel: bulging staves (each its own tone), a lip round a sunk lid, iron hoops
-export function makeBarrel(seed, lod = 0) {
+export const makeBarrel = (seed, lod = 0) => withDetail(lod, () => barrel(seed));
+function barrel(seed) {
   const R = mulberry32(seed), mb = new MB(), base = WOOD.clone().multiplyScalar(0.85 + R() * 0.2), H = 0.9, r0 = 0.31, r1 = 0.37;
   const rad = y => r0 + (r1 - r0) * Math.sin(Math.PI * y / H);
-  if (lod) { cyl(mb, 0, H / 2, 0, 0.36, H, 8, base, 7, 'y', WOOD_D); return geo(mb, { colliders: [[0, 0, 0.4]] }); }
   const segs = 16, prof = [[0, 0]];
   for (let k = 0; k <= 8; k++) prof.push([rad(k / 8 * H), k / 8 * H]);
   prof.push([r0 - 0.03, H], [r0 - 0.03, H - 0.035], [0, H - 0.035]);
@@ -152,9 +122,9 @@ export function makeBarrel(seed, lod = 0) {
 }
 
 // crate: boards on every side between corner battens, the dark inside showing through the gaps
-export function makeCrate(seed, lod = 0) {
+export const makeCrate = (seed, lod = 0) => withDetail(lod, () => crate(seed));
+function crate(seed) {
   const R = mulberry32(seed), mb = new MB(), s = 0.6 + R() * 0.25, h = s / 2, base = WOOD.clone().multiplyScalar(0.9 + R() * 0.2);
-  if (lod) { box(mb, 0, h, 0, s, s, s, base, 7); return geo(mb, { colliders: [[0, 0, s * 0.7]] }); }
   put(mb, Poly.box(s - 0.05, s - 0.05, s - 0.05).translate(0, h, 0), C('#3a2c20'), 0);
   for (const [n, a] of [[X, Z], [X.clone().negate(), Z], [Z, X], [Z.clone().negate(), X], [Y, X]]) {
     for (let k = 0; k < 3; k++) {
@@ -170,9 +140,9 @@ export function makeCrate(seed, lod = 0) {
 }
 
 // hay bale: a soft round bale (a cylinder bevelled deep into its ends), two twine bands
-export function makeHaybale(seed, lod = 0) {
+export const makeHaybale = (seed, lod = 0) => withDetail(lod, () => haybale(seed));
+function haybale(seed) {
   const R = mulberry32(seed), mb = new MB();
-  if (lod) { cyl(mb, 0, 0.6, 0, 0.6, 1.25, 8, C('#f2d58c'), 4, 'x', C('#d6b46a')); return geo(mb, { colliders: [[-0.4, 0, 0.6], [0.4, 0, 0.6]] }); }
   const p = Poly.cylinder(0.6, 1.25, 20).bevel({ width: 0.13, segments: 3 }).jitter(0.025, 2.5, R() * 100);
   p.F.forEach(f => { f.col = Math.abs(p.normal(f).y) > 0.9 ? C('#d6b46a') : C('#f2d58c'); });
   put(mb, p, C('#f2d58c'), 4, { at: M.makeRotationZ(Math.PI / 2).setPosition(0.625, 0.6, 0) });
@@ -181,11 +151,11 @@ export function makeHaybale(seed, lod = 0) {
 }
 
 // wood pile: split logs with bark sides and pale, softened end grain
-export function makeWoodpile(seed, lod = 0) {
+export const makeWoodpile = (seed, lod = 0) => withDetail(lod, () => woodpile(seed));
+function woodpile(seed) {
   const R = mulberry32(seed), mb = new MB();
   for (let row = 0; row < 4; row++) for (let k = 0; k < 6 - row; k++) {
     const r = 0.11 + R() * 0.04, L = 1.1 + R() * 0.2, x = -0.75 + k * 0.27 + row * 0.13, y = 0.12 + row * 0.22, bark = C('#6e5440').multiplyScalar(0.85 + R() * 0.3);
-    if (lod) { cyl(mb, x, y, 0, r, L, 5, bark, 7, 'z', C('#c9a477')); continue; }
     const p = Poly.cylinder(r, L, 9, { u: Y }).bevel({ width: 0.012, segments: 1 }).jitter(0.008, 4, R() * 100);
     p.F.forEach(f => { if (Math.abs(p.normal(f).y) > 0.8) Object.assign(f, { col: C('#c99c68').multiplyScalar(0.9 + R() * 0.15), card: 0 }); else f.col = bark; });   // end grain
     put(mb, p, bark, 7, { at: M.makeRotationX(Math.PI / 2).setPosition(x, y, -L / 2) });
@@ -194,13 +164,9 @@ export function makeWoodpile(seed, lod = 0) {
 }
 
 // two-wheeled cart: plank bed with side boards, spoked wheels (rim, hub, spokes), shafts, sometimes a load of hay
-export function makeCart(seed, lod = 0) {
+export const makeCart = (seed, lod = 0) => withDetail(lod, () => cart(seed));
+function cart(seed) {
   const R = mulberry32(seed), mb = new MB();
-  if (lod) {
-    box(mb, 0, 0.75, 0, 1.6, 0.1, 1.1, WOOD, 7);
-    for (const s of [-1, 1]) { box(mb, 0, 0.98, s * 0.55, 1.6, 0.36, 0.06, WOOD, 7); box(mb, s * 0.8, 0.98, 0, 0.06, 0.36, 1.1, WOOD, 7); cyl(mb, 0, 0.5, s * 0.64, 0.5, 0.08, 10, WOOD_D, 7, 'z'); }
-    return geo(mb, { colliders: [[-0.4, 0, 0.75], [0.4, 0, 0.75], [1.6, 0, 0.3]] });
-  }
   for (let k = 0; k < 5; k++) timber(mb, V3(-0.8, 0.75, -0.55 + (k + 0.5) * 0.22), V3(0.8, 0.75, -0.55 + (k + 0.5) * 0.22), 0.06, 0.2, WOOD.clone().multiplyScalar(0.88 + R() * 0.2), R);
   for (const s of [-1, 1]) {
     for (const y of [0.88, 1.08]) timber(mb, V3(-0.82, y, s * 0.55), V3(0.82, y, s * 0.55), 0.17, 0.05, WOOD.clone().multiplyScalar(0.85 + R() * 0.2), R, Y);
@@ -221,9 +187,9 @@ export function makeCart(seed, lod = 0) {
 }
 
 // signpost: a hewn post with arrow-shaped boards pointing two ways
-export function makeSignpost(seed, lod = 0) {
+export const makeSignpost = (seed, lod = 0) => withDetail(lod, () => signpost(seed));
+function signpost(seed) {
   const R = mulberry32(seed), mb = new MB();
-  if (lod) { box(mb, 0, 1.1, 0, 0.12, 2.2, 0.12, WOOD_D, 7); return geo(mb, { colliders: [[0, 0, 0.15]] }); }
   post(mb, 0, 0, 0.12, -0.1, 2.15, WOOD_D, R);
   const arrow = [[-0.4, -0.11], [0.3, -0.11], [0.43, 0], [0.3, 0.11], [-0.4, 0.11]];
   for (let k = 0; k < 2; k++) {
@@ -236,14 +202,9 @@ export function makeSignpost(seed, lod = 0) {
 
 // market stall: posts, a counter of planks, a striped cloth awning that sags between its poles with a scalloped
 // valance, baskets of produce
-export function makeStall(seed, lod = 0) {
+export const makeStall = (seed, lod = 0) => withDetail(lod, () => stall(seed));
+function stall(seed) {
   const R = mulberry32(seed), mb = new MB(), cloth = [C('#c9463a'), C('#3f6a8a'), C('#d9a43a'), C('#5f7d3e')][Math.floor(R() * 4)];
-  if (lod) {
-    for (const [x, z] of [[-1.3, -0.8], [1.3, -0.8], [-1.3, 0.8], [1.3, 0.8]]) box(mb, x, 1.2, z, 0.1, 2.4, 0.1, WOOD_D, 7);
-    box(mb, 0, 0.85, 0.55, 2.7, 0.08, 0.7, WOOD, 7); box(mb, 0, 0.42, 0.85, 2.7, 0.84, 0.06, WOOD.clone().multiplyScalar(0.85), 7);
-    quad(mb, V3(-1.5, 2.6, -1.0), V3(1.5, 2.6, -1.0), V3(1.5, 2.25, 1.25), V3(-1.5, 2.25, 1.25), cloth, 0, V3(0, 1, 0.2));
-    return geo(mb, { colliders: [[-1.0, 0, 0.7], [0, 0, 0.7], [1.0, 0, 0.7]] });
-  }
   for (const [x, z] of [[-1.3, -0.8], [1.3, -0.8], [-1.3, 0.8], [1.3, 0.8]]) timber(mb, V3(x, 0, z), V3(x, 2.5 - (z > 0 ? 0.3 : 0), z), 0.1, 0.1, WOOD_D, R);
   put(mb, Poly.box(2.75, 0.08, 0.72).bevel({ width: 0.02, segments: 1 }).jitter(0.004, 3, seed), WOOD, 7, { at: M.makeTranslation(0, 0.85, 0.55) });
   for (let k = 0; k < 4; k++) timber(mb, V3(-1.35, 0.12 + k * 0.2, 0.86), V3(1.35, 0.12 + k * 0.2, 0.86), 0.19, 0.04, WOOD.clone().multiplyScalar(0.8 + R() * 0.15), R, Y);
@@ -265,8 +226,8 @@ export function makeStall(seed, lod = 0) {
 }
 
 // windmill: tapered octagonal stone tower, shingled cap, four-armed rotor with sails facing +z
-export function makeWindmill(seed, lod = 0) { return withChamfer(lod === 0, () => windmill(seed, lod)); }
-function windmill(seed, lod) {
+export const makeWindmill = (seed, lod = 0) => withChamfer(lod === 0, () => windmill(seed));
+function windmill(seed) {
   const mb = new MB(), H = 9, r0 = 2.4, r1 = 1.7, sides = 8, hub = H + 0.9;
   for (let i = 0; i < sides; i++) {
     const a0 = (i + 0.5) / sides * Math.PI * 2, a1 = (i + 1.5) / sides * Math.PI * 2, am = (a0 + a1) / 2;
@@ -292,12 +253,11 @@ function windmill(seed, lod) {
     const arm = (t, o) => V3(c * t - s * o, hub + s * t + c * o, zf);
     // arm spar
     quad(mb, arm(0.3, -0.08), arm(L, -0.08), arm(L, 0.08), arm(0.3, 0.08), WOOD_D, 27, V3(0, 0, 1), undefined, hub);
-    if (lod === 2) continue;
     // sail: a cloth panel on a lattice beside the spar
     const sc = C('#efe6d2');
     quad(mb, arm(1.4, 0.1), arm(L, 0.1), arm(L, 1.15), arm(1.4, 0.95), sc, 28, V3(0, 0, 1), undefined, hub);
     quad(mb, arm(1.4, 0.1), arm(L, 0.1), arm(L, 1.15), arm(1.4, 0.95), sc.clone().multiplyScalar(0.8), 28, V3(0, 0, -1), undefined, hub);
-    if (lod === 0) for (let t = 1.4; t <= L + 0.01; t += 0.48) quad(mb, arm(t, 0.08), arm(t + 0.05, 0.08), arm(t + 0.05, 1.18), arm(t, 1.18), WOOD_D, 27, V3(0, 0, 1), undefined, hub);
+    for (let t = 1.4; t <= L + 0.01; t += 0.48) quad(mb, arm(t, 0.08), arm(t + 0.05, 0.08), arm(t + 0.05, 1.18), arm(t, 1.18), WOOD_D, 27, V3(0, 0, 1), undefined, hub);
   }
   return geo(mb, { colliders: [[0, 0, r0 + 0.3]] });
 }
@@ -309,14 +269,17 @@ export function makeCabbage(seed) {
   for (let k = 0; k < 9; k++) { const a = k * 2.4 + R(), d = V3(Math.cos(a), 0, Math.sin(a)); addPetal(mb, V3(0, 0.05, 0), d, 0.28 + R() * 0.08, 0.22, 0.5, 0.5, C('#4f7f3a'), C('#8db96a'), sw); }
   return geo(mb, {});
 }
+// the lighter level keeps every other stalk (the same draws in the same order), stems and ears thicker to cover
+// the same area
 export function makeWheat(seed, lod = 0) {
-  const R = mulberry32(seed), mb = new MB(), n = lod ? 10 : 26;
-  for (let k = 0; k < n; k++) {
+  const R = mulberry32(seed), mb = new MB(), k2 = lod ? Math.SQRT2 : 1;
+  for (let k = 0; k < 26; k++) {
     const x = (R() - 0.5) * 0.5, z = (R() - 0.5) * 0.5, h = 0.8 + R() * 0.3, lx = x + (R() - 0.5) * 0.12, lz = z + (R() - 0.5) * 0.12;
     const stem = C('#c9b067'), ear = C('#e2c578').multiplyScalar(0.9 + R() * 0.2), sw = P => Math.max(0, P.y / h) ** 1.5 * 0.4;
-    const a = mb.v(x - 0.006, 0, z, 0, 0, 1, stem, 0), b = mb.v(x + 0.006, 0, z, 0, 0, 1, stem, 0), c = mb.v(lx, h - 0.12, lz, 0, 0, 1, stem, sw(V3(0, h, 0)));
+    if (lod && k % 2) continue;
+    const a = mb.v(x - 0.006 * k2, 0, z, 0, 0, 1, stem, 0), b = mb.v(x + 0.006 * k2, 0, z, 0, 0, 1, stem, 0), c = mb.v(lx, h - 0.12, lz, 0, 0, 1, stem, sw(V3(0, h, 0)));
     mb.tri(a, b, c); mb.tri(a, c, b);
-    addBlob(mb, V3(lx, h, lz), 0.025, 0, { lump: 0.1, squash: 3.2, nblend: 0, sway: () => sw(V3(0, h, 0)), color: () => ear });
+    addBlob(mb, V3(lx, h, lz), 0.025 * k2, 0, { lump: 0.1, squash: 3.2 / k2, nblend: 0, sway: () => sw(V3(0, h, 0)), color: () => ear });
   }
   return geo(mb, {});
 }

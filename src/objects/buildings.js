@@ -7,8 +7,12 @@
 //   timber  white plaster in a dark timber frame, wooden shingle roof
 //   hut     small weathered plank hut with a thatch roof
 // front: 'eave' puts the long side (and the door) to the street, 'gable' turns a gable end to it.
-// lod 0 is the full model for close views; lod 1 drops rubble stones, flower boxes, pots, rafter tails and
-// mullions; lod 2 is walls, roof, chimney and tower only. The model faces +z (front door) with its footprint
+// LOD: every level is the same house (same layout, colours and materials; details that only some levels draw
+// use their own random streams). lod 0 is the close-up model (chamfered timber, tile courses as geometry,
+// rafter tails, mullions, flower boxes, door pots); lod 1 drops what is under a pixel or two from its distance
+// (sharp timber, the tile texture on flat roof planes); lod 2 keeps every part that still shows as colour or
+// silhouette — roof edges and boards, porch, banner, quoins, timber frame, shutters — but sets windows and the
+// door flat on the wall. The model faces +z (front door) with its footprint
 // centred on the origin. Surfaces carry uv in metres and a material card for the prop shader
 // (0 vertex colour · 2 masonry · 3 rock · 4 thatch · 5 shingle · 6 lit glass · 7 wood · 8 stucco · 9 clay tile ·
 // 10 rubble stone · 11 lamp glass · 13 dressed stone).
@@ -219,7 +223,11 @@ export function houseParams(seed, p = {}) {
 
 export function makeHouse(seed, lod = 0, params = {}) { return withChamfer(lod === 0, () => buildHouse(seed, lod, params)); }
 function buildHouse(seed, lod, params) {
+  // R lays the house out; details that only some LOD levels draw take their own streams (RQ quoins, RD door pots,
+  // RW flower boxes, RB banner), so a level that skips one never shifts the draws behind it — every level is the
+  // same house, down to the chimney's height and where the banner hangs
   const P = houseParams(seed, params), R = mulberry32(seed * 31 + 7), mb = new MB();
+  const RQ = mulberry32(seed * 31 + 101), RD = mulberry32(seed * 31 + 103), RW = mulberry32(seed * 31 + 107), RB = mulberry32(seed * 31 + 109);
   const { style, floors, roof, pitch } = P, gable = P.front === 'gable', hut = style === 'hut';
   // built in a frame with the ridge along x; a gable-front house is turned a quarter at the end so its +x gable
   // (where the door goes) faces +z
@@ -331,13 +339,13 @@ function buildHouse(seed, lod, params) {
     if (sx > 0) mb.tri(ids[0], ids[2], ids[1]); else mb.tri(ids[0], ids[1], ids[2]);
   }
   // quoins: dressed stones up the corners, long and short in turn, standing a little proud of the wall
-  if ((style === 'stone' || P.quoins) && lod < 2) for (const [f1, f2] of [['f', 'r'], ['r', 'b'], ['b', 'l'], ['l', 'f']]) {
+  if (style === 'stone' || P.quoins) for (const [f1, f2] of [['f', 'r'], ['r', 'b'], ['b', 'l'], ['l', 'f']]) {
     const h1 = len(f1) / 2, a1 = alongV(f1), a2 = alongV(f2), t = 0.035, cn = onWall(f1, h1, 0, 0);
     if (blocked(cn.x, cn.z, 0.4)) continue;
     for (let y = y0 + 0.02, k = 0; y < yW - 0.3; k++) {
-      const bh = 0.27 + R() * 0.07, l1 = (k % 2 ? 0.3 : 0.52) + R() * 0.06, l2 = (k % 2 ? 0.52 : 0.3) + R() * 0.06;
+      const bh = 0.27 + RQ() * 0.07, l1 = (k % 2 ? 0.3 : 0.52) + RQ() * 0.06, l2 = (k % 2 ? 0.52 : 0.3) + RQ() * 0.06;
       const c = onWall(f1, h1, y + bh / 2, 0).addScaledVector(a1, (t - l1) / 2).addScaledVector(a2, (l2 - t) / 2);
-      const qc = STONE.clone().multiplyScalar(0.98 + R() * 0.12);
+      const qc = STONE.clone().multiplyScalar(0.98 + RQ() * 0.12);
       if (lod === 0) bevelBox(mb, c, a1, V3(0, 1, 0), a2, l1 + t, bh, l2 + t, 0.03, qc, 13); else obox(mb, c, a1, V3(0, 1, 0), a2, l1 + t, bh, l2 + t, qc, 13);
       y += bh + 0.025;
     }
@@ -368,17 +376,18 @@ function buildHouse(seed, lod, params) {
     pyramid(mb, lp.x, lp.y + 0.12, lp.z, lw / 2 + 0.05, 0.12, IRON, 0);
     ud.lights.push([lp.x + dO.x * 0.2, lp.y, lp.z + dO.z * 0.2, 7]);
   }
-  if (lod === 0 && !hut) {
-    // canopy: a tilted plank roof over the door on two angled brackets (pots only where the ground is near)
+  if (!hut) {
+    // canopy: a tilted plank roof over the door on two angled brackets (pots only where the ground is near, and
+    // only close up)
     const cw = door.w + 0.75, cd = 0.8, cy = y0 + door.h + 0.42, tilt = 0.32;
     const ax = dAl.clone(), dn = V3(dO.x * Math.cos(tilt), -Math.sin(tilt), dO.z * Math.cos(tilt)), up = ax.clone().cross(dn).negate();
     const cc = onWall(doorFace, doorA, cy, 0).addScaledVector(dn, cd / 2);
     obox(mb, cc, ax, up, dn, cw, 0.07, cd, TIMBER_L, 7);
     for (const s of [-1, 1]) beam(mb, onWall(doorFace, doorA + s * (cw / 2 - 0.15), cy - 0.55, 0.02), onWall(doorFace, doorA + s * (cw / 2 - 0.15), cy - 0.2, cd - 0.15), 0.07, TIMBER);
     // pots by the door
-    for (let k = 0, n = P.steps > 0.25 ? 0 : Math.floor(R() * 3); k < n; k++) {
-      const pc = onWall(doorFace, doorA + door.w / 2 + 0.5 + k * 0.45, 0, 0.32), s = 0.8 + R() * 0.5;
-      lathe(mb, pc.x, pc.z, [[0.1 * s, y0 - 0.25], [0.2 * s, y0 - 0.25 + 0.12 * s], [0.23 * s, y0 - 0.25 + 0.3 * s], [0.14 * s, y0 - 0.25 + 0.5 * s], [0.15 * s, y0 - 0.25 + 0.56 * s]], 8, POT[Math.floor(R() * POT.length)], 0);
+    for (let k = 0, n = P.steps > 0.25 || lod ? 0 : Math.floor(RD() * 3); k < n; k++) {
+      const pc = onWall(doorFace, doorA + door.w / 2 + 0.5 + k * 0.45, 0, 0.32), s = 0.8 + RD() * 0.5;
+      lathe(mb, pc.x, pc.z, [[0.1 * s, y0 - 0.25], [0.2 * s, y0 - 0.25 + 0.12 * s], [0.23 * s, y0 - 0.25 + 0.3 * s], [0.14 * s, y0 - 0.25 + 0.5 * s], [0.15 * s, y0 - 0.25 + 0.56 * s]], 8, POT[Math.floor(RD() * POT.length)], 0);
     }
   }
   ud.door = (() => { const p = onWall(doorFace, doorA, 0, 1.3); return [p.x, p.z]; })();
@@ -388,7 +397,10 @@ function buildHouse(seed, lod, params) {
   for (const o of openings) {
     const deep = !o.small && lod < 2, dp = deep ? 0.24 : -0.02;
     panel(o.f, o.a, o.y, o.ww, o.wh, -dp, GLOW, 6);
-    if (lod === 2) continue;
+    if (lod === 2) {   // far away: the coloured shutters still read, as flat panels
+      if (!hut && !o.small) for (const s of [-1, 1]) { const sw = o.ww / 2 + 0.05; panel(o.f, o.a + s * (o.ww / 2 + 0.03 + sw / 2), o.y - 0.02, sw, o.wh + 0.04, 0.01, shut, 7, true); }
+      continue;
+    }
     const fr = TIMBER;
     if (!deep) {   // gable windows sit on the wall in a plain frame
       slat(o.f, o.a, o.y - 0.08, o.ww + 0.2, 0.08, 0, 0.1, TIMBER_L); slat(o.f, o.a, o.y + o.wh, o.ww + 0.2, 0.1, 0, 0.08, fr);
@@ -406,15 +418,15 @@ function buildHouse(seed, lod, params) {
       panel(o.f, sa, o.y - 0.02, sw - 0.01, o.wh + 0.04, 0.036, shut, 7, true);
       if (lod === 0) for (const yy of [o.y + 0.1, o.y + o.wh - 0.14]) slat(o.f, sa, yy, sw - 0.06, 0.05, 0.036, 0.015, shut.clone().multiplyScalar(0.72));
     }
-    if (lod === 0 && !o.small && o.y < y0 + 1.2 && R() < 0.55) {
+    if (!o.small && o.y < y0 + 1.2 && RW() < 0.55 && lod === 0) {
       const b = onWall(o.f, o.a, o.y - 0.33, 0.2), ax = alongV(o.f), bw = o.ww + 0.22;
       box(mb, b.x, b.y, b.z, ax.x ? bw : 0.26, 0.2, ax.x ? 0.26 : bw, TIMBER_L, 7);
-      planter(mb, b.clone().setY(b.y + 0.09), ax, outN(o.f), bw, BLOOM[Math.floor(R() * BLOOM.length)], R);
+      planter(mb, b.clone().setY(b.y + 0.09), ax, outN(o.f), bw, BLOOM[Math.floor(RW() * BLOOM.length)], RW);
     }
   }
 
   // timber frame (timber style): posts at corners and between openings, beams at the floor lines
-  if (style === 'timber' && lod < 2) for (const f of ['f', 'b', 'l', 'r']) {
+  if (style === 'timber') for (const f of ['f', 'b', 'l', 'r']) {
     const ln = len(f), half = ln / 2;
     for (let fl = 0; fl <= floors; fl++) slat(f, 0, y0 + fl * fh - (fl === floors ? 0.2 : 0.08), ln + 0.2, 0.2, -0.02, 0.1, TIMBER);
     const posts = Math.max(2, Math.round(ln / 2.2) + 1);
@@ -431,9 +443,11 @@ function buildHouse(seed, lod, params) {
   for (const s of [1, -1]) {
     const n = V3(0, cp, s * sp), down = V3(0, -sp, s * cp), ez = s * (hz + ov);
     const Ru = x => V3(x, ridgeU, 0), Eu = x => V3(x, eaveU, ez), o1 = n.clone().multiplyScalar(td), o2 = n.clone().multiplyScalar(td + tt);
-    if (roof === 'tile' && lod < 2) {
+    if (roof === 'tile' && lod === 0) {
       // tile courses as geometry, in step with the texture's rows (9 per 2m): each course's lower edge stands a
-      // tile's thickness proud of the deck, so the courses catch the light and step along the rakes and eaves
+      // tile's thickness proud of the deck, so the courses catch the light and step along the rakes and eaves.
+      // Farther levels lay the same texture on a plane: its rows carry the courses' shading, and the 4.5cm steps
+      // are under a pixel from there
       const top = Ru(0).add(o2), dn = Eu(0).add(o2).sub(top), sl = dn.length(), pc = 2 / 9, lip = 0.045, nC = Math.ceil(sl / pc - 0.05);
       dn.divideScalar(sl);
       const at = (x, t, up) => V3(x, top.y, top.z).addScaledVector(dn, t).addScaledVector(n, up);
@@ -443,7 +457,6 @@ function buildHouse(seed, lod, params) {
         if (up) quad(mb, at(xa, t1, up), at(xb, t1, up), at(xb, t1, 0), at(xa, t1, 0), rc.clone().multiplyScalar(0.72), rCard, dn, [xa, t1 - 0.03]);
       }
     } else quad(mb, Ru(xa).add(o2), Ru(xb).add(o2), Eu(xb).add(o2), Eu(xa).add(o2), rc, rCard, n);
-    if (lod === 2) continue;
     quad(mb, Eu(xa).add(o1), Eu(xb).add(o1), Eu(xb).add(o2), Eu(xa).add(o2), rc.clone().multiplyScalar(0.7), rCard, down);       // tile edge
     for (const x of [xa, xb]) quad(mb, Ru(x).add(o1), Eu(x).add(o1), Eu(x).add(o2), Ru(x).add(o2), rc.clone().multiplyScalar(0.7), rCard, V3(Math.sign(x), 0, 0));
     quad(mb, Ru(xa), Ru(xb), Eu(xb), Eu(xa), TIMBER.clone().multiplyScalar(0.62), thatch ? 4 : 7, n.clone().negate());              // soffit
@@ -477,7 +490,7 @@ function buildHouse(seed, lod, params) {
   if (chim) {
     // Hateno's chimneys are massive: built into the gable, nearly as wide as it at the foot, tapering steadily like
     // a tall truncated pyramid into a stack well above the ridge. Squared-off section.
-    const H = ridgeTop + 2.2 + R() * 1.4, prof = [], segs = lod ? 8 : 16, rb = 1.3, rt = 0.55;
+    const H = ridgeTop + 2.2 + R() * 1.4, prof = [], segs = 16, rb = 1.3, rt = 0.55;
     for (let k = 0; k <= 12; k++) { const t = k / 12, y = yB + t * (H - yB); prof.push([rt + (rb - rt) * Math.pow(Math.max(0, 1 - Math.max(0, y) / H), 0.9), y]); }
     lathe(mb, chim.x, chim.z, prof, segs, wash.clone().multiplyScalar(1.0), 8, { sq: 7, sx: 0.75, sz: 1.0, rot: Math.PI / segs, v0: yB - vf, shade: j => (j === 0 ? 0.85 : j < 3 ? 0.92 : 1) });
     const hw = rt + 0.05;
@@ -492,23 +505,23 @@ function buildHouse(seed, lod, params) {
     pyramid(mb, chim.x, H + 0.47, chim.z, hw + 0.16, 0.4, rc, rCard);   // little hipped roof of tiles
     ud.smoke.push([chim.x, H + 0.45, chim.z]);
     const sx = Math.sign(chim.x);
-    if (lod < 2) beam(mb, V3(chim.x + sx * 0.12, H - 1.0, chim.z), V3(chim.x + sx * 1.5, yB + 0.9, chim.z + Math.sign(chim.z) * 2.3), 0.11, TIMBER);
-    if (lod === 0) beam(mb, V3(chim.x - sx * 0.1, H - 0.5, chim.z), V3(sx * (hx - 2.0), ridgeTop + 0.02, 0), 0.1, TIMBER);
+    beam(mb, V3(chim.x + sx * 0.12, H - 1.0, chim.z), V3(chim.x + sx * 1.5, yB + 0.9, chim.z + Math.sign(chim.z) * 2.3), 0.11, TIMBER);   // the prop: part of the silhouette even far off
+    if (lod < 2) beam(mb, V3(chim.x - sx * 0.1, H - 0.5, chim.z), V3(sx * (hx - 2.0), ridgeTop + 0.02, 0), 0.1, TIMBER);
     ud.colliders.push([chim.x, chim.z, 1.1]);
   } else if (P.chimney) {
     const cx = sc * (hx - 0.9), cz = (R() < 0.5 ? -1 : 1) * Math.min(hz * 0.4, 0.9), top = ridgeTop + 0.9;
     box(mb, cx, (y0 + top) / 2, cz, 0.78, top - y0, 0.78, STONE, 2);
-    if (lod < 2) box(mb, cx, top + 0.08, cz, 0.96, 0.16, 0.96, STONE.clone().multiplyScalar(0.9), 13);
+    box(mb, cx, top + 0.08, cz, 0.96, 0.16, 0.96, STONE.clone().multiplyScalar(0.9), 13);
     ud.smoke.push([cx, top + 0.3, cz]);
   }
 
   // ── round tower with a conical tile roof at a back corner ──
   if (tower) {
-    const yT = yW + 1.0 + (floors === 1 ? 0.5 : 0), segs = lod ? 12 : 20, { x: tx, z: tz } = tower;
+    const yT = yW + 1.0 + (floors === 1 ? 0.5 : 0), segs = lod === 2 ? 14 : 20, { x: tx, z: tz } = tower;
     lathe(mb, tx, tz, [[rT + 0.1, yB], [rT + 0.1, y0 + 0.15]], segs, STONE.clone().multiplyScalar(0.92), 10);
     lathe(mb, tx, tz, [[rT, y0 + 0.1], [rT, y0 + 0.7], [rT, yT - 0.8], [rT, yT]], segs, wash, 8, { v0: y0 + 0.1 - vf, shade: j => [0.85, 0.98, 0.98, 0.78][j] });
     const re = rT + 0.45;
-    if (lod < 2) lathe(mb, tx, tz, [[rT, yT], [re, yT - 0.14]], segs, TIMBER.clone().multiplyScalar(0.62), 7);
+    lathe(mb, tx, tz, [[rT, yT], [re, yT - 0.14]], segs, TIMBER.clone().multiplyScalar(0.62), 7);
     lathe(mb, tx, tz, [[re, yT - 0.14], [re + 0.02, yT - 0.02], [0.02, yT - 0.02 + re * 1.05]], segs, rc, rCard, { flipV: true });
     if (lod < 2) box(mb, tx, yT + re * 1.05 + 0.1, tz, 0.12, 0.3, 0.12, TIMBER, 7);
     if (lod < 2) {   // a window facing away from the house
@@ -526,14 +539,14 @@ function buildHouse(seed, lod, params) {
   }
 
   // ── banner: a cloth hung from a pole on the street side ──
-  if (P.banner && lod < 2) {
+  if (P.banner) {
     const f = doorFace, ln = len(f), free = [];
     for (let a = -ln / 2 + 0.75; a <= ln / 2 - 0.75; a += 0.25) {
       const c = onWall(f, a, 1, 0);
       if (Math.abs(a - doorA) > door.w / 2 + 0.75 && !openings.some(o => o.f === f && !o.small && Math.abs(o.a - a) < o.ww / 2 + 0.95) && !blocked(c.x, c.z, 0.3)) free.push(a);
     }
     if (free.length) {
-      const a = free[Math.floor(R() * free.length)], top = (f === 'l' || f === 'r') ? yW + 0.35 : yW - 0.35, bl = Math.min(2.5, top - y0 - 0.9), bc = BANNER[(P.tint + 1) % BANNER.length];
+      const a = free[Math.floor(RB() * free.length)], top = (f === 'l' || f === 'r') ? yW + 0.35 : yW - 0.35, bl = Math.min(2.5, top - y0 - 0.9), bc = BANNER[(P.tint + 1) % BANNER.length];
       beam(mb, onWall(f, a - 0.55, top + 0.06, 0.16), onWall(f, a + 0.55, top + 0.06, 0.16), 0.07, TIMBER);
       for (const s of [-1, 1]) beam(mb, onWall(f, a + s * 0.45, top + 0.06, 0), onWall(f, a + s * 0.45, top + 0.06, 0.18), 0.06, TIMBER);
       const al = alongV(f), on = outN(f), ids = [], rows = 6;
@@ -552,7 +565,7 @@ function buildHouse(seed, lod, params) {
   }
 
   // porch: a lean-to on posts over the front door (stone and timber houses)
-  if (P.porch && lod < 2) {
+  if (P.porch) {
     const pw = Math.min(len(doorFace) - 0.6, 3.4), pd = 1.9, py = y0 + door.h + 0.55;
     const a0 = Math.max(-len(doorFace) / 2 + pw / 2 + 0.3, Math.min(len(doorFace) / 2 - pw / 2 - 0.3, doorA));
     const W = (a, y, o) => onWall(doorFace, a, y, o);

@@ -2,8 +2,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generate } from './helpers.js';
+import * as THREE from 'three';
 import { makeHouse, houseParams } from '../src/objects/buildings.js';
 import { INST } from '../src/objects/placement.js';
+import { KINDS, lodLevels } from '../src/objects/kinds.js';
 
 test('house models: every style and front builds clean geometry, and LOD levels shed detail', () => {
   for (const style of ['hateno', 'stone', 'timber', 'hut']) for (const front of ['eave', 'gable']) {
@@ -20,6 +22,26 @@ test('house models: every style and front builds clean geometry, and LOD levels 
   const g = makeHouse(5, 0, { style: 'hateno', chimney: true });
   assert.equal(g.userData.lights.length, 1);
   assert.equal(g.userData.smoke.length, 1);
+});
+
+// a LOD level that changes the model's outline (a different chimney height, a dropped porch, a bigger crate)
+// shows as a jump however well it cross-fades: every level must fill the same box
+test('LOD levels of houses and props are the same model: same bounds at every level', () => {
+  const bounds = g => { g.computeBoundingBox(); return g.boundingBox; };
+  for (const style of ['hateno', 'stone', 'timber', 'hut']) for (const seed of [3, 11, 27]) {
+    const P = { style, tower: style === 'hateno', banner: true, porch: style !== 'hateno' }, b0 = bounds(makeHouse(seed, 0, P));
+    for (const lod of [1, 2]) {
+      const b = bounds(makeHouse(seed, lod, P));
+      for (const k of ['min', 'max']) assert.ok(b[k].distanceTo(b0[k]) < 0.08, `${style} #${seed} lod ${lod}: ${k} ${b[k].toArray().map(v => v.toFixed(2))} vs ${b0[k].toArray().map(v => v.toFixed(2))}`);
+    }
+  }
+  for (const kind of Object.keys(KINDS).filter(k => KINDS[k].mat === 'building' && !k.startsWith('house') && lodLevels(k) > 1)) {
+    const b0 = bounds(KINDS[kind].make(1001, 0)), size = b0.getSize(new THREE.Vector3()).length();
+    for (let lod = 1; lod < lodLevels(kind); lod++) {
+      const b = bounds(KINDS[kind].make(1001, lod));
+      assert.ok(b.min.distanceTo(b0.min) < 0.04 * size && b.max.distanceTo(b0.max) < 0.04 * size, `${kind} lod ${lod}: bounds match`);
+    }
+  }
 });
 
 test('house parameters: pinned choices survive a different seed, so plan and model agree', () => {

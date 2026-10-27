@@ -1,13 +1,14 @@
 // Prop materials (trees, flowers, rocks, buildings) with wind sway, leaf-card alpha to coverage, translucency
 // and rim light, and the LOD-bucketed instanced meshes built from the placement list.
 import * as THREE from 'three';
+import { isSmall } from '../platform.js';
 import { normalAt } from '../world/grid.js';
 import { KINDS, kindGeo, lodLevels } from '../objects/kinds.js';
 import { INST } from '../objects/placement.js';
 import { mat } from './material.js';
 import { LEAF_TEX } from './textures.js';
 import { SHADOW, REFLECT } from './layers.js';
-import { ROCK_TINT } from './uniforms.js';
+import { ROCK_TINT, U } from './uniforms.js';
 import { ATLAS } from './texgen.js';
 
 // 1 when the scene target is multisampled (set by src/render/post.js): leaf cards then use alpha to coverage
@@ -22,11 +23,11 @@ export function setPropTextures(t) {
 const AT = `const vec2 AT_SIZE = vec2(${ATLAS.w}.0, ${ATLAS.h}.0); const float AT_COLS = ${ATLAS.cols}.0, AT_CELL = ${ATLAS.cell}.0, AT_PAD = ${ATLAS.pad}.0;`;
 
 const propMat = (o) => mat(`
-attribute vec3 aColor; attribute float aSway; attribute vec2 aUV; attribute float aCard;
+attribute vec3 aColor; attribute float aSway; attribute vec2 aUV; attribute float aCard; attribute float aFade;
 uniform float uSwayAmp; uniform float uSwayFreq;
-varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH;
+varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH; varying float vFade;
 void main(){
-  vUV = aUV; vCard = aCard;
+  vUV = aUV; vCard = aCard; vFade = aFade;
   mat4 m = modelMatrix * instanceMatrix;
   vec3 pos = position, nrm = normal;
   if (aCard > 19.5) {
@@ -74,8 +75,9 @@ vec3 perturb(vec3 N, vec3 p, vec2 uv, vec3 tn) {
   float im = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-12));
   return normalize(mat3(T * im, B * im, N) * tn);
 }
-varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH;
+varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH; varying float vFade;
 void main(){
+  if (lodClip(vFade, gl_FragCoord.xy)) discard;
   vec3 alb = vC; float alpha = 1.0;
   bool card = vCard > 0.5 && vCard < 1.5;
   bool foliage = card || (vCard > 11.5 && vCard < 12.5);   // leaf cards, and the leaf masses of far trees (12)
@@ -191,9 +193,18 @@ const MATS = {
 
 const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _pp = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
 
+// LOD tuning, shared with the agent API (mapEditor.debug.lod): fade is the cross-fade time in seconds; force ≥ 0
+// pins every instance to that level (clamped to the kind's last one) for side-by-side checks of two levels;
+// bias scales every switch distance. Set dirty after changing force or bias.
+export const LOD = { fade: 0.6, force: -1, bias: isSmall ? 0.65 : 1, dirty: false };
+
 // One InstancedMesh per kind / variant / LOD level. Instances are re-bucketed by distance to the camera
 // whenever it has moved a couple of metres: the detailed model up close, lighter ones farther out (KINDS[k].lod
-// distances, with 6% hysteresis so nothing flickers at a boundary), nothing beyond KINDS[k].cull.
+// distances × LOD.bias, with 6% hysteresis so nothing flickers at a boundary), nothing beyond KINDS[k].cull.
+// A level change never pops: for LOD.fade seconds the instance sits in both meshes and the two dissolve into
+// each other (aFade, lodClip in common.glsl.js); past the cull distance a model dissolves away the same way and
+// fades back in when the camera returns. Jumps (a camera teleport, the first frame after a pause or a
+// rebuild) switch at once, so a snapshot never catches a half-faded scene.
 // Returns { counts, lights, smoke, update(camera, force) }: lights ([x, y, z, radius]) and smoke emitters
 // ([x, y, z]) are the models' userData points placed in the world, for src/render/lights.js and smoke.js.
 const _v = new THREE.Vector3();
@@ -216,37 +227,91 @@ export function buildInstances(group) {
     });
     const meshes = [];
     for (let l = 0; l < levels; l++) {
-      const mesh = new THREE.InstancedMesh(kindGeo(kind, v, l), MATS[K.mat], list.length);
+      // the cached model geometry is shared by every placement of it; this mesh draws it through a wrapper that
+      // shares its buffers and adds the per-instance fade
+      const src = kindGeo(kind, v, l), geo = new THREE.BufferGeometry(), fade = new THREE.InstancedBufferAttribute(new Float32Array(list.length), 1);
+      for (const a in src.attributes) geo.setAttribute(a, src.attributes[a]);
+      geo.setIndex(src.index); geo.setAttribute('aFade', fade.setUsage(THREE.DynamicDrawUsage));
+      const mesh = new THREE.InstancedMesh(geo, MATS[K.mat], list.length);
+      mesh.fade = fade; mesh.userData = { kind, variant: v, level: l };
       mesh.count = 0; mesh.frustumCulled = false;
       if (!K.small) { mesh.layers.enable(SHADOW); mesh.layers.enable(REFLECT); }  // flowers: thin stems would only shadow themselves
       group.add(mesh); meshes.push(mesh);
     }
-    sets.push({ lod: K.lod || [], cull: K.cull || Infinity, mats, pos, meshes, last: new Int8Array(list.length).fill(-1) });
-    counts[kind] = (counts[kind] || 0) + list.length;
+    const n = list.length;
+    sets.push({ lod: K.lod || [], cull: K.cull || Infinity, mats, pos, meshes, last: new Int8Array(n).fill(-1), prev: new Int8Array(n).fill(-1), t0: new Float32Array(n), fading: [] });
+    counts[kind] = (counts[kind] || 0) + n;
   }
   const at = new THREE.Vector3(1e9, 0, 0);
-  function update(camera, force) {
-    const c = camera.position;
-    if (!force && c.distanceToSquared(at) < 4) return;
-    at.copy(c);
-    for (const S of sets) {
-      const n = S.last.length, fill = S.meshes.map(() => 0), L = S.lod;
-      for (let i = 0; i < n; i++) {
-        const dx = S.pos[i * 3] - c.x, dy = S.pos[i * 3 + 1] - c.y, dz = S.pos[i * 3 + 2] - c.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        let l = 0; while (l < L.length && d > L[l]) l++;
-        const was = S.last[i];
-        if (was >= 0 && l !== was && was < S.meshes.length) {
-          if (l > was && d < L[was] * 1.06) l = was;            // hysteresis: stay until clearly past the boundary
-          else if (l < was && d > L[l] * 0.94) l = was;
-        }
-        if (d > S.cull) l = S.meshes.length;
-        S.last[i] = l;
-        if (l >= S.meshes.length) continue;
-        const M = S.meshes[l], j = fill[l]++;
-        M.instanceMatrix.array.set(S.mats.subarray(i * 16, i * 16 + 16), j * 16);
-      }
-      S.meshes.forEach((M, l) => { M.count = fill[l]; M.instanceMatrix.needsUpdate = true; });
+  let lastT = -1e9, fadeEnd = -1e9;
+  // where instance i goes: its level now, or meshes.length when culled
+  function levelOf(S, i, d) {
+    const L = S.lod, hidden = S.meshes.length;
+    if (LOD.force >= 0) return d > S.cull ? hidden : Math.min(LOD.force, hidden - 1);
+    let l = 0; while (l < L.length && d > L[l] * LOD.bias) l++;
+    const was = S.last[i];
+    if (was >= 0 && l !== was && was < hidden) {
+      if (l > was && d < L[was] * LOD.bias * 1.06) l = was;            // hysteresis: stay until clearly past the boundary
+      else if (l < was && d > L[l] * LOD.bias * 0.94) l = was;
     }
+    return d > S.cull * (was === hidden ? 0.97 : 1) ? hidden : l;
+  }
+  // fade value of an outgoing (+h) or incoming (−h) copy, h = how far the fade has run
+  const fadeOut = h => Math.min(1, Math.max(h, 1e-4)), fadeIn = h => -Math.min(1, Math.max(h, 1e-4));
+  function rebucket(c, now, instant) {
+    fadeEnd = -1e9;
+    for (const S of sets) {
+      const n = S.last.length, hidden = S.meshes.length, fill = S.meshes.map(() => 0);
+      S.fading.length = 0;
+      const put = (l, i, f) => {
+        const M = S.meshes[l], j = fill[l]++;
+        M.instanceMatrix.array.set(S.mats.subarray(i * 16, i * 16 + 16), j * 16); M.fade.array[j] = f;
+        return j;
+      };
+      for (let i = 0; i < n; i++) {
+        const dx = S.pos[i * 3] - c.x, dy = S.pos[i * 3 + 1] - c.y, dz = S.pos[i * 3 + 2] - c.z;
+        const l = levelOf(S, i, Math.sqrt(dx * dx + dy * dy + dz * dz)), was = S.last[i];
+        if (instant) S.prev[i] = -1;
+        if (l !== was) {
+          // a new fade starts from the level on screen; one already running carries on from where it was
+          if (instant || was < 0) S.prev[i] = -1;
+          else if (S.prev[i] < 0 || now - S.t0[i] >= LOD.fade) { S.prev[i] = was; S.t0[i] = now; }
+          else if (S.prev[i] === l) { S.prev[i] = was; S.t0[i] = now - (LOD.fade - (now - S.t0[i])); }   // turned back mid-fade
+          S.last[i] = l;
+        }
+        const p = S.prev[i], h = p >= 0 ? (now - S.t0[i]) / LOD.fade : 1;
+        if (p >= 0 && h < 1) {
+          const e = { i, h0: S.t0[i], a: -1, b: -1, la: l, lb: p };
+          if (l < hidden) e.a = put(l, i, fadeIn(h));
+          if (p < hidden) e.b = put(p, i, fadeOut(h));
+          S.fading.push(e); fadeEnd = Math.max(fadeEnd, S.t0[i] + LOD.fade);
+        } else {
+          S.prev[i] = -1;
+          if (l < hidden) put(l, i, 0);
+        }
+      }
+      S.meshes.forEach((M, l) => { M.count = fill[l]; M.instanceMatrix.needsUpdate = true; M.fade.needsUpdate = true; });
+    }
+  }
+  // between re-buckets only the running fades move on
+  function advance(now) {
+    for (const S of sets) {
+      if (!S.fading.length) continue;
+      for (const e of S.fading) {
+        const h = (now - e.h0) / LOD.fade;
+        if (e.a >= 0) S.meshes[e.la].fade.array[e.a] = fadeIn(h);
+        if (e.b >= 0) S.meshes[e.lb].fade.array[e.b] = fadeOut(h);
+      }
+      for (const M of S.meshes) M.fade.needsUpdate = true;
+    }
+  }
+  function update(camera, force) {
+    const c = camera.position, now = U.uTime.value;
+    const jump = force || LOD.dirty || now - lastT > 0.25 || c.distanceToSquared(at) > 30 * 30;
+    lastT = now;
+    if (jump || c.distanceToSquared(at) >= 4 || (fadeEnd > -1e9 && now >= fadeEnd)) {
+      at.copy(c); rebucket(c, now, jump); LOD.dirty = false;
+    } else if (now < fadeEnd) advance(now);
   }
   return { counts, lights, smoke, update };
 }

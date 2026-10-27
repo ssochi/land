@@ -39,7 +39,7 @@ Poly.box(0.5, 0.3, 0.4).subdivide({ levels: 2, sharp: 30, crease: 0.5 }).jitter(
 | 基本体（Cube、Cylinder、Grid、Icosphere…） | | `box` `cylinder` `grid` `icosphere` ✅ |
 | **Boolean**（差、并、交） | 开洞、合并任意网格 | 计划中：需要时接 manifold-3d（WASM，保证流形）或 three-bvh-csg；墙上开门窗目前直接按矩形切面 |
 | **Skin**（骨架长成网格）、**Wireframe** | 树枝、栏杆、框架 | 计划中 |
-| **Decimate**、**Remesh** | 自动减面、重新布线 | 计划中（自动生成远景 LOD） |
+| **Decimate**、**Remesh** | 自动减面、重新布线 | 远景 LOD 目前用 `withDetail` 重跑同一段建模代码（见「用法建议」）；需要时再加 |
 | Knife、Loop Cut、Bridge Edge Loops、Poke、Grid Fill | 编辑模式的手工操作 | 按需加 |
 | 几何节点：Instance on Points、Distribute Points on Faces、Curve to Mesh、Mesh Boolean… | 程序化散布与组合 | 场景层已有散布（`m.scatter`），模型层按需加 |
 
@@ -98,7 +98,7 @@ Poly.op('puff', (p, sel, h) => {
 
 ## 用法建议
 
-- **近景 LOD 才倒角**：远处看不出倒角，`lod > 0` 走简单几何。`buildings.js` 用 `withChamfer(lod === 0, fn)` 让一栋房子的所有 `box` / `obox` / `beam` 在近景版本里自动带倒棱。
+- **LOD 用同一段代码**：远景级别不要另写一份简化模型（布局、颜色一变，换级就会被看出来），而是把近景代码包在 `withDetail(lod, fn)` 里再跑一遍：比 `DETAIL.minBevel`（1 级 5cm、2 级 15cm）窄的倒角省掉、宽的只留一段斜面，细分少一级（1 级至少保留一级，圆的东西还是圆的），`lathe` / `cylinder` / `circle2` / `icosphere` 的分段按比例减少。所有随机数照常按顺序取，各级的布局和颜色完全一致。`village-props.js` 的道具都这样做；`buildings.js` 另用 `withChamfer(lod === 0, fn)` 让近景房屋的 `box` / `obox` / `beam` 自动带倒棱。换级效果用 `node tools/lod-check.mjs <kind>` 检查。
 - **倒角宽度**跟零件尺寸走：木方 2–3cm，小件取最小边的 15–20%；`segments: 1` 加上加权法线已经像圆角，大件或特写才用 2–3 段。
 - **打破完美**：`jitter` 给木头、石头一点不规则（幅度为尺寸的 3–7%），石块用「细分 + 折痕 + 噪声」。
 - **缓存**：同尺寸零件重复很多时，`bake` 一次、`emit` 多次。

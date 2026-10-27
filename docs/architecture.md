@@ -72,7 +72,7 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称�
 
 1. 在 `src/objects/` 写生成器 `makeXxx(seed)`，返回 `BufferGeometry`。网格用建模工具 `poly/`（基本体 + 倒角、细分、挤出等，`toMB` 烘焙进 `MB`，见 [modeling.md](modeling.md)）或 `mesh-builder.js` 的 `MB` 和各种 `add*` 直接拼。
 2. 在 `src/objects/kinds.js` 的 `KINDS` 登记（变体数、材质族、间距、遮蔽等），在 `KIND_DOCS` 写一句说明。
-3. LOD：生成器接收第二个参数 `lod`（0 最精细），在 `KINDS` 里写 `lod: [d1, d2]` 切换距离（米），需要远处剔除的写 `cull`。`render/props.js` 每帧按距离把实例分到各级的 InstancedMesh 里。
+3. LOD：生成器接收第二个参数 `lod`（0 最精细），在 `KINDS` 里写 `lod: [d1, d2]` 切换距离（米），需要远处剔除的写 `cull`。`render/props.js` 按距离把实例分到各级的 InstancedMesh 里，换级时两级交叉淡化约 0.6 秒（实例属性 `aFade`，`common.glsl.js` 的 `lodClip`）。各级必须是同一个模型、只少看不见的细节：用 `poly/` 建模的直接把近景代码包在 `withDetail(lod, fn)` 里；只在某些级别画的细节用单独的随机数流。改完用 `node tools/lod-check.mjs <kind>` 检查换级时画面变了多少。
 4. 依赖脚本参数的模型（比如指定尺寸的房屋）用 `customVariant(kind, params)` 换一个 ≥1000 的变体号，生成器的第三个参数就是这份参数。
 
 **材质卡号**（顶点属性 `aCard`，`render/props.js` 的着色器按它选材质）：0 顶点色 · 1 叶片卡片 · 2 砌石（砌缝由着色器画）· 3 岩石贴图（三向投影，随 `m.env({ rock })` 换色）· 4 茅草 · 5 木瓦 · 6 窗玻璃（白天暗、夜里亮）· 7 木板 · 8 灰泥 · 9 陶土瓦 · 10 乱石 · 11 灯罩（白天也微亮）· 12 远处树冠的叶团（顶点色，和叶片卡片一样在阴影里仍透进一部分阳光）· 13 条石（墙角石、石阶、烟囱帽）· 20 以上是风车叶轮（绕轮毂转动，卡号 − 20 是材质）。4–10 和 13 用米为单位的 uv 采样 `texgen.js` 烘焙的建筑材质图集（一张 2048×1024，4×2 格，每格中间 448px 是贴图、四周 32px 是绕回的边，按连续 uv 的梯度采样，平铺处没有 mip 接缝）。灰泥（8）的 v 是离墙脚的高度：着色器据此让墙脚的灰泥剥落、露出乱石，自己做灰泥面时让 v 从墙脚起算（`box`、`lathe` 都能给起始 v；不该剥落的部件给一个大的起始 v）。

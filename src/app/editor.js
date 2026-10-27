@@ -15,7 +15,7 @@ import { createSky } from '../render/sky.js';
 import { terrainMat, buildTerrainMeshes, setTerrainTextures } from '../render/terrain-mesh.js';
 import { buildWaterMeshes, MIST_PX } from '../render/water-mesh.js';
 import { createReflection } from '../render/reflection.js';
-import { buildInstances, setPropTextures } from '../render/props.js';
+import { buildInstances, setPropTextures, LOD } from '../render/props.js';
 import { createGrass } from '../render/grass.js';
 import { createLights } from '../render/lights.js';
 import { buildSmoke } from '../render/smoke.js';
@@ -209,6 +209,7 @@ export function createEditor(renderer, canvas) {
     sky.position.copy(camera.position);
     U.uFogDensity.value = atmosphere.fogBase;
     pollen.m.uniforms.uCenter.value.set(controls.target.x, heightAt(controls.target.x, controls.target.z), controls.target.z);
+    if (LOD.dirty) shadows.invalidate();   // a forced LOD level (mapEditor.debug.lod) changes what casts shadows
     grass.update(camera); if (props) props.update(camera); lights.update(camera); shadows.update(); reflection.update(); post.render();
     if (ed.built && !unitsChecked) { unitsChecked = true; checkTextureUnits(); }
   }

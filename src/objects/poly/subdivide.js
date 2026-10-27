@@ -3,7 +3,7 @@
 // form. Edges whose faces meet at more than o.sharp degrees are creased with weight o.crease (1 keeps them sharp,
 // 0.5 rounds them only a little); open boundaries stay put. o.simple splits without smoothing. Creases carry over
 // to the halves of an edge, so they hold through every level.
-import { Poly, V3 } from './mesh.js';
+import { Poly, V3, DETAIL } from './mesh.js';
 
 const ek = (a, b) => (a < b ? a + ',' + b : b + ',' + a);
 
@@ -54,7 +54,8 @@ function once(p, crease, simple) {
 }
 
 Poly.op('subdivide', (p, o = {}) => {
-  const levels = o.levels != null ? o.levels : 1, lim = Math.cos((o.sharp != null ? o.sharp : 180) * Math.PI / 180);
+  // a lighter LOD (withDetail) drops levels, keeping one at detail 1 so rounded parts stay round
+  const L = o.levels != null ? o.levels : 1, levels = Math.max(DETAIL.level === 1 ? Math.min(1, L) : 0, L - DETAIL.level), lim = Math.cos((o.sharp != null ? o.sharp : 180) * Math.PI / 180);
   let crease = p.crease || new Map();
   if (o.sharp != null) {
     const half = p.half(), N = p.F.map(f => p.normal(f));

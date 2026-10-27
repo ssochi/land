@@ -12,6 +12,22 @@
 import * as THREE from 'three';
 
 export const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+
+// Level of detail for the whole toolkit. A model's lighter LOD levels are its close-up code run again under
+// withDetail(level, fn): bevels narrower than DETAIL.minBevel are skipped (wider ones keep their silhouette with
+// a single facet), subdivision drops `level` levels, and curved primitives (lathe, cylinder, sweep paths built
+// with circle2, icosphere) get fewer segments. Every random draw happens in the same order at every level, so
+// the levels share layout, proportions, colours and materials and only lose detail too small to see from
+// where they are used — a level change then reads as nothing, not as a different model.
+export const DETAIL = { level: 0, minBevel: 0, segs: 1 };
+const LEVELS = [{ minBevel: 0, segs: 1 }, { minBevel: 0.05, segs: 0.5 }, { minBevel: 0.15, segs: 0.34 }];
+export function withDetail(level, fn) {
+  const prev = Object.assign({}, DETAIL), l = Math.max(0, Math.min(LEVELS.length - 1, level | 0));
+  Object.assign(DETAIL, { level: l }, LEVELS[l]);
+  try { return fn(); } finally { Object.assign(DETAIL, prev); }
+}
+// segment count for a curve of n segments at the current detail (never fewer than min)
+export const segsAt = (n, min = 6) => DETAIL.segs >= 1 ? n : Math.max(Math.min(n, min), Math.round(n * DETAIL.segs));
 const FACE = { card: null, col: null, u: null, vDown: false, tag: null };
 
 export class Poly {

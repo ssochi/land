@@ -13,9 +13,9 @@
 //      instead of a scatter of flat cards. Colour darkens toward the inside and underside of each lobe and of the
 //      crown. A darker inner blob per lobe keeps it from reading as see-through. In shadow, foliage still gets
 //      part of the sun (render/props.js: the crown is porous, the shadow map treats each card as opaque).
-//   lod 0: twigs + dense small cards; lod 1: limbs + fewer, larger cards; lod 2: one lumpy ball per lobe.
+//   lod 0: twigs + dense small cards; lod 1: fewer twigs, fewer and larger cards; lod 2: limbs, larger cards still.
 import * as THREE from 'three';
-import { clamp, smooth } from '../core/math.js';
+import { clamp, smooth, mulberry32 } from '../core/math.js';
 import { vnoise, vnoise3 } from '../core/noise.js';
 import { MB, V3, addBlob } from './mesh-builder.js';
 import { colonize, branchesToMesh } from './colonize.js';
@@ -116,24 +116,27 @@ export function buildBroadleaf(R, o, lod) {
     // blobs shade about a point between the lobe's centre and the crown's and a little below, like the cards'
     // blended, upward-tilted normals
     const nc = L.c.clone().lerp(o.C, 0.4); nc.y -= L.r * 0.35;
-    if (lod === 2) {   // one lumpy, tufted ball per lobe, lit like the cards it replaces
-      addBlob(mb, L.c, L.r * 1.08, 1, { card: 12, ncenter: nc, nblend: 0.85, lump: 0.34, tufts: 14, seed: o.seed + li, squash: sq, sway: o.sway, color: Q => leafCol(Q, L, hue, 0.9) });
-      return;
-    }
     addBlob(mb, L.c, L.r * 0.62, 1, { card: 12, ncenter: nc, nblend: 0.85, lump: 0.3, seed: o.seed + li * 7, squash: sq, sway: o.sway, color: Q => leafCol(Q, L, hue, 0.45).multiplyScalar(0.9) });
-    const area = 4 * Math.PI * L.r * L.r, n = Math.round(area * o.density * (lod ? 0.3 : 1)), size = o.leafSize * (lod ? 1.7 : 1);
+    // every level is the same leaf cards (each lobe draws them from its own stream, so the twigs a level grows
+    // first do not move them): a farther level keeps one card in `keep`, enlarged to cover about the same area,
+    // so the crown keeps its ragged outline, its gaps and its tone at the switch
+    const area = 4 * Math.PI * L.r * L.r, n = Math.round(area * o.density), keep = [1, 3, 8][lod], scale = Math.sqrt(keep) * [1, 0.98, 0.9][lod];
+    const RC = mulberry32(o.seed * 977 + li * 31 + 5);
     for (let k = 0; k < n; k++) {
-      const u = R() * 2 - 1, a = R() * 6.283, s = Math.sqrt(1 - u * u), d = V3(s * Math.cos(a), u, s * Math.sin(a));
-      if (d.y < -0.6 && R() < 0.6) continue;                                   // fewer leaves on the shaded underside
+      const u = RC() * 2 - 1, a = RC() * 6.283, s = Math.sqrt(1 - u * u), d = V3(s * Math.cos(a), u, s * Math.sin(a));
+      if (d.y < -0.6 && RC() < 0.6) continue;                                   // fewer leaves on the shaded underside
       const lump = 1 + (vnoise3(d.x * 2.1 + li, d.y * 2.1, d.z * 2.1 - li) - 0.5) * 0.5;
-      const depth = R() < 0.15 ? 1 + R() * 0.18 : 0.7 + R() * 0.32;              // a few sprigs stick out past the shell
-      const c = L.c.clone().add(V3(d.x * L.r * depth * lump, d.y * L.r * depth * lump * sq, d.z * L.r * depth * lump));
+      const depth = RC() < 0.15 ? 1 + RC() * 0.18 : 0.7 + RC() * 0.32;              // a few sprigs stick out past the shell
       // card plane at random: cards facing out of the lobe would turn edge-on along its rim and leave a smooth
       // silhouette; the shading comes from the projected normals, not from the plane
-      const f = V3(R() - 0.5, R() - 0.5, R() - 0.5).normalize();
+      const f = V3(RC() - 0.5, RC() - 0.5, RC() - 0.5).normalize();
       const t1 = (Math.abs(f.y) < 0.9 ? V3(0, 1, 0) : V3(1, 0, 0)).cross(f).normalize(), t2 = f.clone().cross(t1);
-      const rot = R() * 6.283, ax = t1.clone().multiplyScalar(Math.cos(rot)).addScaledVector(t2, Math.sin(rot)), ay = f.clone().cross(ax);
-      const h = size * (0.75 + R() * 0.5) * 0.5, tint = 0.92 + R() * 0.16;
+      const rot = RC() * 6.283, ax = t1.clone().multiplyScalar(Math.cos(rot)).addScaledVector(t2, Math.sin(rot)), ay = f.clone().cross(ax);
+      // sprigs sticking out past the shell keep nearly their own size (they make the ragged outline); the rest
+      // are enlarged and sit deeper, so a card reaches no farther out than the one it stands for
+      const h0 = o.leafSize * (0.75 + RC() * 0.5) * 0.5, h = h0 * (depth > 1 ? Math.min(scale, 1.5) : scale), tint = 0.92 + RC() * 0.16;
+      if (k % keep) continue;
+      const rr = L.r * depth * lump - (h - h0) * (lod === 1 ? 0.5 : 0.7), c = L.c.clone().add(V3(d.x * rr, d.y * rr * sq, d.z * rr));
       const ids = [[-1, -1, 0, 0], [1, -1, 1, 0], [1, 1, 1, 1], [-1, 1, 0, 1]].map(([x, y, uu, vv]) => {
         const Q = c.clone().addScaledVector(ax, x * h).addScaledVector(ay, y * h), nn = nrm(Q, L);
         return mb.v(Q.x, Q.y, Q.z, nn.x, nn.y, nn.z, leafCol(Q, L, hue, depth).multiplyScalar(tint), o.sway(Q), uu * 0.5, vv, 1);

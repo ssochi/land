@@ -17,6 +17,22 @@ test('every tree kind builds finite, deterministic geometry and sheds triangles 
       return g.index.count / 3;
     });
     assert.ok(tris[0] > tris[1] && tris[1] > tris[2], `${kind}: ${tris.join(' > ')}`);
+    // the same tree at every level: the foliage reaches as high and as wide (a level with other lobes or tiers,
+    // or cards poking out farther, would jump). Measured on percentiles of leaf-card centres plus their leafy middle
+    // (the corners of the far levels' enlarged cards are mostly transparent) or, for pines, of the needle skirts
+    const reach = l => {
+      const g = make(4242, l), p = g.attributes.position.array, c = g.attributes.aCard.array, ys = [], rs = [];
+      if (kind === 'pine') { for (let i = 0; i < c.length; i++) if (c[i] === 0 && p[i * 3 + 1] > 3) { ys.push(p[i * 3 + 1]); rs.push(Math.hypot(p[i * 3], p[i * 3 + 2])); } }
+      else for (let i = 0; i + 3 < c.length; i++) if (c[i] === 1 && c[i + 3] === 1) {   // cards are four corners in a row
+        const x = (p[i * 3] + p[i * 3 + 6]) / 2, y = (p[i * 3 + 1] + p[i * 3 + 7]) / 2, z = (p[i * 3 + 2] + p[i * 3 + 8]) / 2;
+        const h = Math.hypot(p[i * 3 + 3] - p[i * 3], p[i * 3 + 4] - p[i * 3 + 1], p[i * 3 + 5] - p[i * 3 + 2]) * 0.35;   // the card's leafy middle
+        ys.push(y + h); rs.push(Math.hypot(x, z) + h); i += 3;
+      }
+      const q = (a, f) => a.sort((x, y) => x - y)[Math.floor(a.length * f)];
+      return { top: q(ys, 0.97), r: q(rs, 0.9) };
+    };
+    const r0 = reach(0);
+    for (const l of [1, 2]) { const r = reach(l); assert.ok(Math.abs(r.top - r0.top) < 0.08 * r0.top && Math.abs(r.r - r0.r) < 0.12 * r0.r, `${kind} lod ${l}: top ${r.top.toFixed(2)} vs ${r0.top.toFixed(2)}, reach ${r.r.toFixed(2)} vs ${r0.r.toFixed(2)}`); }
     assert.deepEqual(Array.from(make(4242, 0).attributes.position.array.slice(0, 300)), Array.from(make(4242, 0).attributes.position.array.slice(0, 300)), `${kind}: same seed, same tree`);
   }
   const b = makeBush(3, 0);
