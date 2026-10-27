@@ -8,16 +8,18 @@ import { mat } from './material.js';
 import { LEAF_TEX } from './textures.js';
 import { SHADOW, REFLECT } from './layers.js';
 import { ROCK_TINT } from './uniforms.js';
+import { ATLAS } from './texgen.js';
 
 // 1 when the scene target is multisampled (set by src/render/post.js): leaf cards then use alpha to coverage
 export const A2C = { value: 0 };
-// baked rock texture (src/render/texgen.js) for textured stone; set by setPropTextures()
-const ROCK_A = { value: null }, ROCK_N = { value: null };
-const BUILD_TEX = Object.fromEntries(['Thatch', 'Shingle', 'Plaster', 'Wood', 'Tile', 'Rubble'].flatMap(n => [['u' + n + 'A', { value: null }], ['u' + n + 'N', { value: null }]]));
+// baked textures (src/render/texgen.js): rock for textured stone, the building-material atlas; set by
+// setPropTextures(). Keep the shader's texture count at 16 or below (see checkTextureUnits in editor.js).
+const ROCK_A = { value: null }, ROCK_N = { value: null }, BLD_A = { value: null }, BLD_N = { value: null };
 export function setPropTextures(t) {
-  ROCK_A.value = t.rock.albedo; ROCK_N.value = t.rock.normal;
-  for (const n of ['Thatch', 'Shingle', 'Plaster', 'Wood', 'Tile', 'Rubble']) { const k = n.toLowerCase(); BUILD_TEX['u' + n + 'A'].value = t[k].albedo; BUILD_TEX['u' + n + 'N'].value = t[k].normal; }
+  ROCK_A.value = t.rock.albedo; ROCK_N.value = t.rock.normal; BLD_A.value = t.atlas.albedo; BLD_N.value = t.atlas.normal;
 }
+// GLSL constants for the atlas layout
+const AT = `const vec2 AT_SIZE = vec2(${ATLAS.w}.0, ${ATLAS.h}.0); const float AT_COLS = ${ATLAS.cols}.0, AT_CELL = ${ATLAS.cell}.0, AT_PAD = ${ATLAS.pad}.0;`;
 
 const propMat = (o) => mat(`
 attribute vec3 aColor; attribute float aSway; attribute vec2 aUV; attribute float aCard;
@@ -46,7 +48,18 @@ void main(){
   gl_Position = projectionMatrix * viewMatrix * w;
 }`, `
 uniform float uSharp; uniform float uTrans; uniform sampler2D uLeaf; uniform float uA2C; uniform sampler2D uRockA, uRockN; uniform vec3 uRockTint;
-uniform sampler2D uThatchA, uThatchN, uShingleA, uShingleN, uPlasterA, uPlasterN, uWoodA, uWoodN, uTileA, uTileN, uRubbleA, uRubbleN;
+uniform sampler2D uBldA, uBldN;
+${AT}
+// one building material from the atlas: tile with fract(), but take the filter footprint from the continuous
+// uv (no mip seam where the tile wraps) and cap it so the filter stays inside the cell's 32px gutter
+void bld(float slot, vec2 uv, out vec4 a, out vec4 n) {
+  vec2 sc = vec2(AT_CELL - 2.0 * AT_PAD) / AT_SIZE;
+  vec2 st = (vec2(mod(slot, AT_COLS), floor(slot / AT_COLS)) * AT_CELL + AT_PAD) / AT_SIZE + fract(uv) * sc;
+  vec2 gx = dFdx(uv) * sc, gy = dFdy(uv) * sc;
+  float px = max(length(gx * AT_SIZE), length(gy * AT_SIZE));
+  float k = min(1.0, 12.0 / max(px, 1e-4));
+  a = texture2DGradEXT(uBldA, st, gx * k, gy * k); n = texture2DGradEXT(uBldN, st, gx * k, gy * k);
+}
 // normal map on uv-mapped geometry without stored tangents: a cotangent frame from screen-space derivatives
 vec3 perturb(vec3 N, vec3 p, vec2 uv, vec3 tn) {
   vec3 dp1 = dFdx(p), dp2 = dFdy(p); vec2 du1 = dFdx(uv), du2 = dFdy(uv);
@@ -75,14 +88,13 @@ void main(){
     // building surfaces, uv in metres, textures tile every 2m: 4 thatch · 5 shingle · 6 window · 7 wood · 8 plaster
     // · 9 clay tile · 10 rubble stone · 11 lamp glass (glows by day too, brighter at night)
     vec2 uv = vUV * 0.5; vec4 ta, tn;
-    if (vCard < 4.5) { ta = texture2D(uThatchA, uv); tn = texture2D(uThatchN, uv); }
-    else if (vCard < 5.5) { ta = texture2D(uShingleA, uv); tn = texture2D(uShingleN, uv); }
-    else if (vCard < 6.5) { ta = vec4(vec3(0.06, 0.07, 0.085) / max(vC, vec3(0.01)), 1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 1.0; }   // dark glass by day
+    if (vCard > 5.5 && vCard < 6.5) { ta = vec4(vec3(0.06, 0.07, 0.085) / max(vC, vec3(0.01)), 1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 1.0; }   // dark glass by day
     else if (vCard > 10.5) { ta = vec4(1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 2.0; }
-    else if (vCard < 7.5) { ta = texture2D(uWoodA, uv); tn = texture2D(uWoodN, uv); }
-    else if (vCard < 8.5) { ta = texture2D(uPlasterA, uv); tn = texture2D(uPlasterN, uv); }
-    else if (vCard < 9.5) { ta = texture2D(uTileA, uv); tn = texture2D(uTileN, uv); }
-    else { ta = texture2D(uRubbleA, uv); tn = texture2D(uRubbleN, uv); }
+    else {
+      // atlas slots (texgen.js ATLAS): thatch 0 · shingle 1 · plaster 2 · wood 3 · tile 4 · rubble 5
+      float slot = vCard < 4.5 ? 0.0 : vCard < 5.5 ? 1.0 : vCard < 7.5 ? 3.0 : vCard < 8.5 ? 2.0 : vCard < 9.5 ? 4.0 : 5.0;
+      bld(slot, uv, ta, tn);
+    }
     N = perturb(N, vSP, uv, tn.xyz * 2.0 - 1.0);
     alb *= ta.rgb * mix(0.62, 1.05, tn.w) * 1.25;
   } else if (vCard > 2.5) {
@@ -133,8 +145,8 @@ void main(){
     c = mix(c, vC * vec3(1.0, 0.72, 0.4) * (1.6 + 0.3 * sin(uTime * 2.3 + vSP.x * 3.1)), max(uNight, glow > 1.5 ? 0.55 : 0.0));
   }
   gl_FragColor = vec4(applyFog(c, vWP), alpha);
-}`, { uSwayAmp: { value: o.amp }, uSwayFreq: { value: o.freq }, uSharp: { value: o.sharp }, uTrans: { value: o.trans }, uLeaf: { value: LEAF_TEX }, uA2C: A2C, uRockA: ROCK_A, uRockN: ROCK_N, uRockTint: ROCK_TINT, ...BUILD_TEX },
-  { side: o.double ? THREE.DoubleSide : THREE.FrontSide, alphaToCoverage: !!o.double, extensions: { derivatives: true } });
+}`, { uSwayAmp: { value: o.amp }, uSwayFreq: { value: o.freq }, uSharp: { value: o.sharp }, uTrans: { value: o.trans }, uLeaf: { value: LEAF_TEX }, uA2C: A2C, uRockA: ROCK_A, uRockN: ROCK_N, uRockTint: ROCK_TINT, uBldA: BLD_A, uBldN: BLD_N },
+  { side: o.double ? THREE.DoubleSide : THREE.FrontSide, alphaToCoverage: !!o.double, extensions: { derivatives: true, shaderTextureLOD: true } });
 
 // keyed by KINDS[kind].mat
 const MATS = {

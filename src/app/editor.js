@@ -195,7 +195,7 @@ export function createEditor(renderer, canvas) {
     const hash = (location.hash || '').slice(1);
     setCamera(ed.cameras.find(c => c.name === hash) ? hash : ed.cameras[0].name);
     shadows.invalidate();
-    ed.built = true; window.__mapReady = true;
+    ed.built = true; window.__mapReady = true; unitsChecked = false;
     console.log('MAP_REPORT ' + JSON.stringify(report));
     return report;
   }
@@ -210,6 +210,24 @@ export function createEditor(renderer, canvas) {
     U.uFogDensity.value = atmosphere.fogBase;
     pollen.m.uniforms.uCenter.value.set(controls.target.x, heightAt(controls.target.x, controls.target.z), controls.target.z);
     grass.update(camera); if (props) props.update(camera); lights.update(camera); shadows.update(); reflection.update(); post.render();
+    if (ed.built && !unitsChecked) { unitsChecked = true; checkTextureUnits(); }
+  }
+
+  // WebGL only guarantees 16 texture units per shader and most GPUs (Windows/ANGLE, Mac, phones) stop there: a
+  // material that samples more fails to compile and silently disappears. Headless SwiftShader allows 32, so
+  // test renders would look fine; report it loudly instead (tools/render.mjs prints console errors).
+  let unitsChecked = false;
+  function checkTextureUnits() {
+    const gl = renderer.getContext(), SAMPLERS = [0x8B5E, 0x8B60, 0x8B5F, 0x8B62, 0x8DC1], over = [];   // 2D, cube, 3D, 2D shadow, 2D array
+    for (const p of renderer.info.programs) {
+      let units = 0;
+      for (let i = 0, n = gl.getProgramParameter(p.program, gl.ACTIVE_UNIFORMS); i < n; i++) {
+        const u = gl.getActiveUniform(p.program, i);
+        if (u && SAMPLERS.includes(u.type)) units += u.size;
+      }
+      if (units > 16) over.push(`${p.name} (${units})`);
+    }
+    if (over.length) console.error(`[land] shader uses more than 16 texture units, many GPUs will not draw it: ${over.join(', ')}`);
   }
 
   // advance animation time by sec in fixed 50ms steps (deterministic headless stepping)

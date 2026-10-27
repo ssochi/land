@@ -7,7 +7,8 @@
 // Every texture tiles: all noise and cell lattices are periodic over the [0,1] uv square.
 import * as THREE from 'three';
 
-const VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+// uMap stretches the quad's uv (an atlas cell paints its tile plus a wrapped gutter around it)
+const VS = `uniform vec2 uMap; varying vec2 vUv; void main(){ vUv = uv * uMap.x + uMap.y; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
 // periodic hash / value noise / fbm / voronoi (period `per` lattice cells across the tile)
 const LIB = /* glsl */`
@@ -214,10 +215,10 @@ void main(){
   gl_FragColor = vec4(c, (0.5 + grain * 0.1 + fine * 0.04 - knot * 0.1) * mix(0.3, 1.0, groove));
 }`;
 
-// normal (rgb) + cavity (a) from the height in alpha of tH
+// normal (rgb) + cavity (a) from the height in alpha of tH; uRect maps the tile's uv into tH (an atlas cell)
 const NORMAL = /* glsl */`
-uniform sampler2D tH; uniform float uTexel; uniform float uStrength;
-float H(vec2 o) { return texture2D(tH, vUv + o * uTexel).a; }
+uniform sampler2D tH; uniform vec2 uTexel; uniform vec4 uRect; uniform float uStrength;
+float H(vec2 o) { return texture2D(tH, uRect.xy + vUv * uRect.zw + o * uTexel).a; }
 void main(){
   float l = H(vec2(-1.0, 0.0)), r = H(vec2(1.0, 0.0)), d = H(vec2(0.0, -1.0)), u = H(vec2(0.0, 1.0)), c = H(vec2(0.0));
   vec3 n = normalize(vec3((l - r) * uStrength, (d - u) * uStrength, 1.0));
@@ -227,31 +228,51 @@ void main(){
   gl_FragColor = vec4(n * 0.5 + 0.5, cav);
 }`;
 
-// name: [painter, size, normal strength]; building textures tile every 2m (see the uv scale in props.js)
-const SPECS = { rock: [ROCK, 1024, 7.0], sward: [SWARD, 512, 4.0], dirt: [DIRT, 512, 5.0],
-  thatch: [THATCH, 512, 6.0], shingle: [SHINGLE, 512, 6.0], plaster: [PLASTER, 512, 3.0], wood: [WOOD, 512, 4.0], tile: [TILE, 512, 7.0], rubble: [RUBBLE, 512, 6.0] };
+// terrain textures, each its own repeating texture: name: [painter, size, normal strength]
+const SPECS = { rock: [ROCK, 1024, 7.0], sward: [SWARD, 512, 4.0], dirt: [DIRT, 512, 5.0] };
 
-// returns { rock: { albedo, normal }, sward, dirt, thatch, shingle, plaster, wood } — repeating, mipmapped textures
+// Building materials share one atlas, so the prop shader needs two texture units for all of them instead of
+// two each (many GPUs allow only 16 per shader; past that the whole material fails to compile). 4 × 2 cells
+// of 512px; each tile fills the middle 448px with a 32px gutter of wrapped-around texture, so filtering near
+// the tile edge reads the tile's own continuation. Building textures tile every 2m (uv scale in props.js).
+export const ATLAS = { w: 2048, h: 1024, cols: 4, cell: 512, pad: 32, slots: { thatch: 0, shingle: 1, plaster: 2, wood: 3, tile: 4, rubble: 5 } };
+const ATLAS_PAINT = { thatch: [THATCH, 6.0], shingle: [SHINGLE, 6.0], plaster: [PLASTER, 3.0], wood: [WOOD, 4.0], tile: [TILE, 7.0], rubble: [RUBBLE, 6.0] };
+
+// returns { rock, sward, dirt, atlas: { albedo, normal, targets } } — repeating (terrain) and atlased (building)
+// mipmapped textures
 export function bakeTextures(renderer) {
   const scene = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
   quad.frustumCulled = false; scene.add(quad);
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  const target = size => {
-    const rt = new THREE.WebGLRenderTarget(size, size, { depthBuffer: false, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping });
+  const target = (w, h, wrap) => {
+    const rt = new THREE.WebGLRenderTarget(w, h, { depthBuffer: false, generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, wrapS: wrap, wrapT: wrap });
     rt.texture.anisotropy = aniso; return rt;
   };
-  const draw = (fs, rt, uniforms = {}) => {
-    quad.material = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: LIB + fs, uniforms, depthTest: false, depthWrite: false });
-    const prev = renderer.getRenderTarget(); renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(prev);
+  // paint fs into rt (or into the cell [x, y, size] of it), uv mapped by uMap
+  const draw = (fs, rt, uniforms = {}, cell = null, uMap = [1, 0]) => {
+    quad.material = new THREE.ShaderMaterial({ vertexShader: VS, fragmentShader: LIB + fs, uniforms: Object.assign({ uMap: { value: new THREE.Vector2(...uMap) } }, uniforms), depthTest: false, depthWrite: false });
+    const prev = renderer.getRenderTarget(), clear = renderer.autoClear;
+    if (cell) { rt.viewport.set(cell[0], cell[1], cell[2], cell[2]); renderer.autoClear = false; }   // a clear would wipe the other cells
+    renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(prev);
+    rt.viewport.set(0, 0, rt.width, rt.height); renderer.autoClear = clear;
     quad.material.dispose();
   };
   const out = {};
   for (const [name, [fs, size, strength]] of Object.entries(SPECS)) {
-    const albedo = target(size), normal = target(size);
+    const albedo = target(size, size, THREE.RepeatWrapping), normal = target(size, size, THREE.RepeatWrapping);
     draw(fs, albedo);
-    draw(NORMAL, normal, { tH: { value: albedo.texture }, uTexel: { value: 1 / size }, uStrength: { value: strength } });
+    draw(NORMAL, normal, { tH: { value: albedo.texture }, uTexel: { value: new THREE.Vector2(1 / size, 1 / size) }, uRect: { value: new THREE.Vector4(0, 0, 1, 1) }, uStrength: { value: strength } });
     out[name] = { albedo: albedo.texture, normal: normal.texture, targets: [albedo, normal] };
   }
+  const A = ATLAS, inner = A.cell - 2 * A.pad, g = A.pad / inner, map = [1 + 2 * g, -g];
+  const albedo = target(A.w, A.h, THREE.ClampToEdgeWrapping), normal = target(A.w, A.h, THREE.ClampToEdgeWrapping);
+  for (const [name, [fs, strength]] of Object.entries(ATLAS_PAINT)) {
+    const k = A.slots[name], x = (k % A.cols) * A.cell, y = Math.floor(k / A.cols) * A.cell, cell = [x, y, A.cell];
+    draw(fs, albedo, {}, cell, map);
+    draw(NORMAL, normal, { tH: { value: albedo.texture }, uTexel: { value: new THREE.Vector2(1 / A.w, 1 / A.h) },
+      uRect: { value: new THREE.Vector4((x + A.pad) / A.w, (y + A.pad) / A.h, inner / A.w, inner / A.h) }, uStrength: { value: strength * inner / A.cell } }, cell, map);
+  }
+  out.atlas = { albedo: albedo.texture, normal: normal.texture, targets: [albedo, normal] };
   quad.geometry.dispose();
   return out;
 }
