@@ -59,6 +59,13 @@ void bld(float slot, vec2 uv, out vec4 a, out vec4 n) {
   float px = max(length(gx * AT_SIZE), length(gy * AT_SIZE));
   float k = min(1.0, 12.0 / max(px, 1e-4));
   a = texture2DGradEXT(uBldA, st, gx * k, gy * k); n = texture2DGradEXT(uBldN, st, gx * k, gy * k);
+  // past the cap the pattern is under-filtered and speckles (roof tiles seen at a grazing angle): fade toward the
+  // material's average, a tiny mip of the middle of its cell
+  float far = smoothstep(12.0, 36.0, px);
+  if (far > 0.0) {
+    vec2 mid = (vec2(mod(slot, AT_COLS), floor(slot / AT_COLS)) + 0.5) * AT_CELL / AT_SIZE;
+    a = mix(a, texture2DLodEXT(uBldA, mid, 6.0), far); n = mix(n, texture2DLodEXT(uBldN, mid, 6.0), far);
+  }
 }
 // normal map on uv-mapped geometry without stored tangents: a cotangent frame from screen-space derivatives
 vec3 perturb(vec3 N, vec3 p, vec2 uv, vec3 tn) {
@@ -85,16 +92,37 @@ void main(){
   }
   vec3 N = normalize(vN); if (!gl_FrontFacing && !card) N = -N;
   float glow = 0.0;
-  if (vCard > 3.5 && vCard < 11.5) {
+  if ((vCard > 3.5 && vCard < 11.5) || (vCard > 12.5 && vCard < 13.5)) {
     // building surfaces, uv in metres, textures tile every 2m: 4 thatch · 5 shingle · 6 window · 7 wood · 8 plaster
-    // · 9 clay tile · 10 rubble stone · 11 lamp glass (glows by day too, brighter at night)
+    // · 9 clay tile · 10 rubble stone · 11 lamp glass (glows by day too, brighter at night) · 13 dressed stone
     vec2 uv = vUV * 0.5; vec4 ta, tn;
     if (vCard > 5.5 && vCard < 6.5) { ta = vec4(vec3(0.06, 0.07, 0.085) / max(vC, vec3(0.01)), 1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 1.0; }   // dark glass by day
-    else if (vCard > 10.5) { ta = vec4(1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 2.0; }
+    else if (vCard > 10.5 && vCard < 11.5) { ta = vec4(1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 2.0; }
     else {
-      // atlas slots (texgen.js ATLAS): thatch 0 · shingle 1 · plaster 2 · wood 3 · tile 4 · rubble 5
-      float slot = vCard < 4.5 ? 0.0 : vCard < 5.5 ? 1.0 : vCard < 7.5 ? 3.0 : vCard < 8.5 ? 2.0 : vCard < 9.5 ? 4.0 : 5.0;
+      // atlas slots (texgen.js ATLAS): thatch 0 · shingle 1 · plaster 2 · wood 3 · tile 4 · rubble 5 · dressed stone 6
+      float slot = vCard < 4.5 ? 0.0 : vCard < 5.5 ? 1.0 : vCard < 7.5 ? 3.0 : vCard < 8.5 ? 2.0 : vCard < 9.5 ? 4.0 : vCard < 10.5 ? 5.0 : 6.0;
       bld(slot, uv, ta, tn);
+      if (vCard > 7.5 && vCard < 8.5 && abs(N.y) < 0.7) {
+        // stucco over metres (the 2m tile alone would repeat): a broad tone, grime splashed up from the ground,
+        // and plaster worn off near the ground along a ragged edge (and in the odd patch higher up), showing the
+        // rubble stones it covers, set back under a thin lip that shades the stone just below it. Heights are
+        // from the wall's foot: stucco v starts at 0 there (buildings.js), whatever the house stands on.
+        vec2 tg = vec2(-N.z, N.x) / max(length(N.xz), 1e-3), wq = vec2(dot(vSP.xz, tg), vSP.y);
+        float hb = vUV.y;
+        float tone = vnoise(wq * 0.4 + 3.1) * 0.65 + vnoise(wq * 1.4 + 7.7) * 0.35;
+        float edge = -0.2 + 0.8 * vnoise(vec2(wq.x * 0.7, 1.7)) + 0.25 * vnoise(vec2(wq.x * 3.1, 5.3));   // below 0: intact to the base
+        // the edge hugs the stones: it rides up over a stone's crown and dips into the joints around it
+        vec4 ra, rn; bld(5.0, uv, ra, rn);
+        float aw = max(0.015, fwidth(hb)), d = hb - edge - (ra.a - 0.45) * 0.3;
+        float patchN = vnoise(wq * vec2(0.9, 1.3) + 11.0) + 0.15 * vnoise(wq * 4.0 + 2.0) + (ra.a - 0.45) * 0.12;
+        float bare = max(1.0 - smoothstep(-aw, aw, d), smoothstep(0.85, 0.87, patchN) * (1.0 - smoothstep(0.9, 2.1, hb)));
+        ta.rgb *= (0.93 + 0.12 * tone) * mix(0.84, 1.0, smoothstep(0.0, 1.2, hb + (tone - 0.5) * 0.8));
+        ta.rgb *= 1.0 + 0.07 * (1.0 - smoothstep(0.0, 0.03 + aw, d)) * step(0.0, d);       // the plaster's lit edge
+        if (bare > 0.001) {
+          ra.rgb *= vec3(0.78, 0.73, 0.64) / max(vC, vec3(0.05)) * (1.0 - 0.4 * smoothstep(-0.06, 0.0, d) * step(d, 0.0));
+          ta = mix(ta, ra, bare); tn = mix(tn, rn, bare);
+        }
+      }
     }
     N = perturb(N, vSP, uv, tn.xyz * 2.0 - 1.0);
     alb *= ta.rgb * mix(0.62, 1.05, tn.w) * 1.25;

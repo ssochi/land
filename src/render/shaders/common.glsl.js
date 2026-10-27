@@ -16,9 +16,14 @@ float shadowAt(vec3 wp, vec3 N) {
   vec3 p = sc.xyz * 0.5 + 0.5;
   if (p.x <= 0.0 || p.y <= 0.0 || p.x >= 1.0 || p.y >= 1.0 || p.z >= 1.0) return 1.0;
   float edge = smoothstep(0.0, 0.1, min(min(p.x, p.y), min(1.0 - p.x, 1.0 - p.y)));
+  // a 3-texel box over bilinearly weighted depth tests (4 × 4 texel centres, the outer ones weighted by how far
+  // the point sits between centres): smooth shadow edges instead of the stair steps of a grid of hard tests,
+  // which show wherever a shadow falls along a wall at a grazing angle
+  vec2 t = p.xy / uShadowTexel - 0.5, f = fract(t), b = (floor(t) - 0.5) * uShadowTexel;
   float s = 0.0;
-  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
-    s += step(p.z - 0.0004, texture2D(uShadowMap, p.xy + vec2(float(i), float(j)) * uShadowTexel * 1.25).r);
+  for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+    float wx = i == 0 ? 1.0 - f.x : i == 3 ? f.x : 1.0, wy = j == 0 ? 1.0 - f.y : j == 3 ? f.y : 1.0;
+    s += wx * wy * step(p.z - 0.0004, texture2D(uShadowMap, b + (vec2(float(i), float(j)) + 0.5) * uShadowTexel).r);
   }
   return mix(1.0, s / 9.0, edge);
 }

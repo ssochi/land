@@ -25,8 +25,26 @@ test('house models: every style and front builds clean geometry, and LOD levels 
 test('house parameters: pinned choices survive a different seed, so plan and model agree', () => {
   const P = houseParams(42, { style: 'hateno' }), { lot, door, ...keep } = P;
   const Q = houseParams(9001, keep);
-  for (const k of ['style', 'front', 'width', 'depth', 'floors', 'roof', 'chimney', 'tower', 'towerSide', 'chimSide', 'banner', 'wash', 'doorA']) assert.deepEqual(Q[k], P[k], k);
+  for (const k of ['style', 'front', 'width', 'depth', 'floors', 'roof', 'chimney', 'tower', 'towerSide', 'chimSide', 'banner', 'quoins', 'wash', 'doorA']) assert.deepEqual(Q[k], P[k], k);
   assert.deepEqual(Q.door, door);
+});
+
+test('windows are set back in holes cut through the wall near by, and sit flush on the far model', () => {
+  const P = { style: 'hateno', front: 'eave', tower: false, chimney: false, width: 8, depth: 6 };
+  const glassDepth = lod => {
+    const g = makeHouse(7, lod, P), p = g.attributes.position.array, k = g.attributes.aCard.array;
+    let inset = 0, n = 0;
+    for (let i = 0; i < k.length; i++) if (k[i] === 6 && Math.abs(p[i * 3 + 2]) > 2.5) { inset = Math.max(inset, 3 - Math.abs(p[i * 3 + 2])); n++; }   // front and back walls at z = ±3
+    return { inset, n };
+  };
+  const near = glassDepth(0), far = glassDepth(2);
+  assert.ok(near.n > 0 && near.inset > 0.2, `near: glass ${near.inset.toFixed(2)}m behind the wall`);
+  assert.ok(far.inset < 0.01, `far: glass flush (${far.inset.toFixed(3)})`);
+  // the stucco carries the height above the wall's foot in v (the shader wears the plaster off there)
+  const g = makeHouse(7, 0, P), uv = g.attributes.aUV.array, k = g.attributes.aCard.array, p = g.attributes.position.array;
+  let ok = true;
+  for (let i = 0; i < k.length; i++) if (k[i] === 8 && Math.abs(p[i * 3 + 2]) > 2.99) ok = ok && Math.abs(uv[i * 2 + 1] - (p[i * 3 + 1] - 0.5)) < 1e-4;
+  assert.ok(ok, 'wall v = height above the foot');
 });
 
 test('flatten cut mode only lowers ground', async () => {

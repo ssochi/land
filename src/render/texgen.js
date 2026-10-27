@@ -143,76 +143,97 @@ void main(){
   gl_FragColor = vec4(c, h);
 }`;
 
-// Stucco: near-white so the vertex colour sets the wash (ochre, cream, peach); soft trowel mottling at a few
-// scales, the faint sweep of the trowel and a fine sandy grain. No cracks: at Hateno's scale they read as dirt.
+// Stucco: near-white so the vertex colour sets the wash (ochre, cream, peach). Only what belongs at a few
+// centimetres: overlapping trowel passes (each a little smoother or rougher) and a sandy grain. Tone over metres, grime and bare patches are added in world space by the prop shader, so
+// nothing here repeats visibly every 2m.
 const PLASTER = /* glsl */`
 void main(){
   vec2 uv = vUv;
-  float m = pfbm(uv * 3.0, 3.0), f = pfbm(uv * 11.0 + 3.0, 11.0), g = pnoise(uv * 160.0, 160.0);
-  float sweep = pnoise(vec2(uv.x * 7.0 + pnoise(uv * 5.0, 5.0) * 1.5, uv.y * 26.0), 7.0);     // trowel strokes
-  float blot = smoothstep(0.58, 0.8, pfbm(uv * 6.0 + 7.0, 6.0));                             // damp, darker patches
-  vec3 c = vec3(0.96, 0.95, 0.93) * (0.9 + 0.1 * m + 0.06 * f + (g - 0.5) * 0.05) * (0.97 + 0.04 * sweep);
-  c *= 1.0 - blot * vec3(0.1, 0.11, 0.13);
-  gl_FragColor = vec4(c, 0.5 + (f - 0.5) * 0.12 + (sweep - 0.5) * 0.05 + (g - 0.5) * 0.05);
+  vec2 w = vec2(pnoise(uv * 6.0, 6.0), pnoise(uv * 6.0 + 3.0, 6.0)) - 0.5;
+  vec2 rel, id; vec3 v = pvoro(uv * vec2(6.0, 9.0) + w * 0.9, vec2(6.0, 9.0), rel, id);
+  float pass = h12(id + 1.3) * smoothstep(0.0, 0.12, v.y - v.x) + 0.5 * (1.0 - smoothstep(0.0, 0.12, v.y - v.x));
+  float g = pnoise(uv * 200.0, 200.0), g2 = pnoise(uv * 70.0 + 5.0, 70.0), f = pnoise(uv * 24.0, 24.0);
+  vec3 c = vec3(0.95, 0.94, 0.92) * (0.98 + 0.025 * pass + 0.015 * f) * (0.975 + 0.05 * g * g2);
+  gl_FragColor = vec4(c, 0.5 + 0.04 * pass + 0.05 * (g - 0.5) * (0.4 + pass) + 0.03 * (g2 - 0.5));
 }`;
 
-// Clay roof tiles (v runs down the slope): staggered rows of flat terracotta tiles with rounded lower corners;
-// each tile has its own fired colour, a lighter worn top and a thick shadowed lower edge over the row below,
-// and the odd dark or mossy one.
+// Clay roof tiles (v runs down the slope): courses of flat terracotta tiles, each a little narrower than its
+// slot (uneven gaps), its lower edge bowed and slightly crooked; the lip catches the light, the top is shaded by
+// the course above. Salmon to terracotta, with the odd over-fired, sun-bleached or lichen-spotted tile.
 const TILE = /* glsl */`
 void main(){
   vec2 uv = vUv;
-  float rows = 8.0, cols = 7.0, r = floor(uv.y * rows), fy = fract(uv.y * rows);
-  float x = uv.x * cols + mod(r, 2.0) * 0.5, cx = floor(x), fx = fract(x);
+  float rows = 9.0, cols = 6.0, r = floor(uv.y * rows), fy = fract(uv.y * rows);
+  float x = uv.x * cols + mod(r, 2.0) * 0.5 + floor(h12(vec2(mod(r, rows), 7.0)) * 3.0) / 6.0, cx = floor(x), fx = fract(x);
   vec2 cell = vec2(mod(cx, cols), mod(r, rows));
-  float id = h12(cell + 3.1), id2 = h12(cell + 9.7);
-  // rounded bottom corners: distance into the tile from its sides and lower edge
-  float rc = 0.22, ex = min(fx, 1.0 - fx) * 1.0, ey = (1.0 - fy) * cols / rows;
-  float corner = length(max(vec2(rc) - vec2(ex, ey), 0.0));
-  float inside = smoothstep(0.0, 0.035, min(ex, ey)) * (1.0 - smoothstep(rc - 0.03, rc, corner));
-  float lowEdge = smoothstep(1.0, 0.86, fy);
-  float grain = pnoise(uv * 96.0, 96.0), spot = pfbm(uv * 12.0 + id, 12.0);
-  vec3 c = mix(vec3(0.66, 0.29, 0.19), vec3(0.8, 0.45, 0.27), id);
-  c = mix(c, vec3(0.5, 0.25, 0.17), step(0.86, id2) * 0.7);                                   // dark, over-fired tiles
-  c = mix(c, vec3(0.47, 0.47, 0.27), smoothstep(0.62, 0.8, spot) * step(0.6, id2) * 0.55);     // lichen
-  c *= (0.88 + 0.2 * fy * lowEdge) * (0.92 + 0.12 * grain);
-  c = mix(vec3(0.17, 0.08, 0.06), c, inside);                                                  // gaps between tiles
-  float h = (0.3 + 0.55 * fy * lowEdge + grain * 0.04) * mix(0.25, 1.0, inside);
+  float id = h12(cell + 3.1), id2 = h12(cell + 9.7), id3 = h12(cell + 5.3);
+  float sx = (fx - 0.5 - (id2 - 0.5) * 0.03) / (0.475 - 0.02 * id3);                     // −1..1 across the tile
+  float lower = 0.93 + 0.05 * (id2 - 0.5) - 0.06 * sx * sx + 0.04 * sx * (id - 0.5);      // bowed, crooked lower edge
+  // below the lip is the top of the next course, in the lip's shadow (not a gap); between two tiles of a course
+  // the one underneath shows, darker
+  float side = 1.0 - smoothstep(0.93, 0.99, abs(sx)), below = smoothstep(lower - 0.015, lower + 0.01, fy);
+  float lip = smoothstep(lower - 0.2, lower - 0.04, fy) * (1.0 - below), under = smoothstep(0.0, 0.35, fy);
+  float grain = pnoise(uv * 120.0, 120.0), spot = pfbm(uv * 14.0 + id, 14.0);
+  vec3 c = mix(vec3(0.64, 0.31, 0.23), vec3(0.82, 0.46, 0.34), id);
+  c = mix(c, vec3(0.52, 0.25, 0.19), step(0.86, id2) * 0.65);                             // over-fired
+  c = mix(c, vec3(0.9, 0.64, 0.5), step(0.9, id3) * 0.45);                                // sun-bleached
+  c = mix(c, vec3(0.52, 0.54, 0.34), smoothstep(0.64, 0.8, spot) * step(0.55, id2) * 0.5); // lichen
+  c *= (0.74 + 0.26 * under) * (1.0 + 0.1 * lip) * (0.93 + 0.12 * grain) * (1.0 + 0.05 * sx * (id3 - 0.5));
+  c = mix(c, c * 0.5, below);
+  c = mix(c * vec3(0.45, 0.4, 0.38), c, side);
+  float h = mix(0.25 + 0.6 * clamp(fy / lower, 0.0, 1.0), 0.18, below) * mix(0.55, 1.0, side) + grain * 0.03;
   gl_FragColor = vec4(c, h);
 }`;
 
-// Rubble stonework (house bases, tower feet, dry walls): irregular rounded stones of mixed size set in mortar,
-// each with its own grey-beige tone, a domed face with grain, and recessed, shadowed joints. Near-neutral so the
-// rock colour (m.env rock) and the vertex colour set the stone.
+// Rubble stonework (house bases, where plaster has worn off, tower feet, dry walls): rounded stones of mixed
+// size in rough courses, each with its own grey-beige tone, a pillowy face that is lit on its crown and darker
+// toward the joints, moss in the low parts, set back in dark mortar. Near-neutral so the vertex colour sets
+// the stone.
 const RUBBLE = /* glsl */`
 void main(){
   vec2 uv = vUv;
-  vec2 w = vec2(pfbm(uv * 4.0, 4.0), pfbm(uv * 4.0 + 5.0, 4.0)) - 0.5;
-  vec2 rel, id; vec3 v = pvoro(uv * vec2(6.0, 8.0) + w * 0.6, vec2(6.0, 8.0), rel, id);
-  float edge = v.y - v.x;                                             // distance to the nearest joint
-  float stone = smoothstep(0.02, 0.09, edge), dome = smoothstep(0.0, 0.5, edge);
-  float tone = h12(id + 2.3), grain = pnoise(uv * 120.0, 120.0), mott = pfbm(uv * 18.0 + tone * 7.0, 18.0);
-  vec3 c = mix(vec3(0.74, 0.71, 0.66), vec3(0.9, 0.88, 0.83), tone) * (0.88 + 0.14 * mott) * (0.94 + 0.08 * grain);
-  c = mix(c, vec3(0.6, 0.62, 0.5), smoothstep(0.62, 0.8, pfbm(uv * 5.0 + 3.0, 5.0)) * 0.35);   // lichen
-  c = mix(vec3(0.6, 0.57, 0.52), c, stone);                                                   // mortar
-  float h = 0.15 + 0.55 * stone * (0.5 + 0.5 * dome) + grain * 0.04 + mott * 0.06;
+  vec2 w = vec2(pfbm(uv * 3.0, 3.0), pfbm(uv * 3.0 + 5.0, 3.0)) - 0.5;
+  vec2 rel, id; vec3 v = pvoro(uv * vec2(7.0, 10.0) + w * 0.9, vec2(7.0, 10.0), rel, id);
+  // rounded stones: the voronoi polygon with its corners cut by a circle around the cell's site
+  float tone = h12(id + 2.3), t2 = h12(id + 8.1);
+  float e = min(v.y - v.x, (0.7 + 0.12 * t2 - v.x) * 0.7), stone = smoothstep(0.035, 0.1, e), pillow = sqrt(clamp(e / 0.4, 0.0, 1.0));
+  float grain = pnoise(uv * 140.0, 140.0), mott = pfbm(uv * 20.0 + tone * 7.0, 20.0);
+  vec3 c = mix(vec3(0.66, 0.63, 0.57), vec3(0.9, 0.86, 0.78), tone);
+  c *= mix(vec3(1.0), vec3(1.03, 0.97, 0.9), step(0.82, t2));                            // a few rust-stained stones
+  c *= (0.76 + 0.3 * pillow) * (0.88 + 0.16 * mott) * (0.94 + 0.08 * grain);
+  c = mix(c, vec3(0.5, 0.56, 0.38), smoothstep(0.6, 0.8, pfbm(uv * 5.0 + 3.0, 5.0)) * (1.0 - 0.6 * pillow) * 0.5);   // moss
+  c = mix(vec3(0.36, 0.34, 0.31) * (0.9 + 0.2 * grain), c, stone);                        // mortar, set back
+  float h = 0.1 + 0.78 * stone * pillow + grain * 0.03 + mott * 0.05;
   gl_FragColor = vec4(c, h);
 }`;
 
-// Planks: boards along u with grooves between them, stretched grain, the odd knot, per-board tone.
+// Planks: boards along u with soft grooves between them, long streaky grain, per-board tone.
 const WOOD = /* glsl */`
 void main(){
   vec2 uv = vUv;
-  float boards = 6.0, b = floor(uv.y * boards), fy = fract(uv.y * boards);
-  float off = h12(vec2(b, 1.0)), x = uv.x + off;
-  float id = h12(vec2(mod(b, boards), 2.0));
-  float grain = pnoise(vec2(x * 6.0, uv.y * 120.0 + pnoise(vec2(x * 3.0, uv.y * 30.0), 30.0) * 4.0), 6.0);
-  float fine = pnoise(vec2(x * 40.0, uv.y * 600.0), 40.0);
-  vec2 kc = vec2(fract(x * 2.0 + id) - 0.5, (fy - 0.5) * 0.4); float knot = smoothstep(0.08, 0.0, length(kc)) * step(0.7, id);
-  float groove = smoothstep(0.0, 0.06, fy) * smoothstep(1.0, 0.94, fy);
-  vec3 c = mix(vec3(0.48, 0.36, 0.25), vec3(0.7, 0.56, 0.4), id * 0.6 + grain * 0.4) * (0.88 + 0.2 * fine);
-  c = mix(c, vec3(0.3, 0.2, 0.13), knot * 0.8) * mix(0.5, 1.0, groove);
-  gl_FragColor = vec4(c, (0.5 + grain * 0.1 + fine * 0.04 - knot * 0.1) * mix(0.3, 1.0, groove));
+  float boards = 5.0, b = floor(uv.y * boards), fy = fract(uv.y * boards);
+  float off = h12(vec2(b, 1.0)), x = uv.x + off, id = h12(vec2(mod(b, boards), 2.0));
+  float warp = pnoise(vec2(x * 3.0, uv.y * 25.0), 3.0);
+  float grain = pnoise(vec2(x * 4.0, uv.y * 90.0 + warp * 3.0), 4.0), streak = pnoise(vec2(x * 2.0, uv.y * 300.0 + warp * 8.0), 2.0);
+  float fine = pnoise(vec2(x * 30.0, uv.y * 500.0), 30.0);
+  float groove = smoothstep(0.0, 0.07, fy) * smoothstep(1.0, 0.93, fy);
+  vec3 c = mix(vec3(0.5, 0.38, 0.27), vec3(0.68, 0.54, 0.39), id * 0.55 + grain * 0.45) * (0.9 + 0.12 * streak) * (0.95 + 0.08 * fine);
+  c *= mix(0.6, 1.0, groove);
+  gl_FragColor = vec4(c, (0.5 + grain * 0.08 + streak * 0.05 + fine * 0.03) * mix(0.4, 1.0, groove));
+}`;
+
+// Dressed stone (quoins, chimney caps, steps, door surrounds): a chiselled face with soft mottling, the odd
+// pit and lichen, no joints (each block is its own piece of geometry).
+const ASHLAR = /* glsl */`
+void main(){
+  vec2 uv = vUv;
+  float m = pfbm(uv * 5.0, 5.0), f = pfbm(uv * 17.0 + 2.0, 17.0), g = pnoise(uv * 150.0, 150.0);
+  vec2 rel, id; vec3 v = pvoro(uv * 9.0, vec2(9.0), rel, id);
+  float pit = smoothstep(0.07, 0.0, v.x) * step(0.88, v.z), tool = pnoise(vec2(uv.x * 60.0, uv.y * 8.0), 60.0);
+  vec3 c = vec3(0.87, 0.85, 0.8) * (0.86 + 0.16 * m + 0.08 * f) * (0.95 + 0.07 * g) * (0.97 + 0.05 * tool);
+  c = mix(c, vec3(0.6, 0.62, 0.48), smoothstep(0.62, 0.82, pfbm(uv * 3.0 + 9.0, 3.0)) * 0.22);
+  c *= 1.0 - pit * 0.3;
+  gl_FragColor = vec4(c, 0.5 + 0.12 * f + 0.04 * g + 0.03 * tool - pit * 0.12);
 }`;
 
 // normal (rgb) + cavity (a) from the height in alpha of tH; uRect maps the tile's uv into tH (an atlas cell)
@@ -235,8 +256,8 @@ const SPECS = { rock: [ROCK, 1024, 7.0], sward: [SWARD, 512, 4.0], dirt: [DIRT, 
 // two each (many GPUs allow only 16 per shader; past that the whole material fails to compile). 4 × 2 cells
 // of 512px; each tile fills the middle 448px with a 32px gutter of wrapped-around texture, so filtering near
 // the tile edge reads the tile's own continuation. Building textures tile every 2m (uv scale in props.js).
-export const ATLAS = { w: 2048, h: 1024, cols: 4, cell: 512, pad: 32, slots: { thatch: 0, shingle: 1, plaster: 2, wood: 3, tile: 4, rubble: 5 } };
-const ATLAS_PAINT = { thatch: [THATCH, 6.0], shingle: [SHINGLE, 6.0], plaster: [PLASTER, 3.0], wood: [WOOD, 4.0], tile: [TILE, 7.0], rubble: [RUBBLE, 6.0] };
+export const ATLAS = { w: 2048, h: 1024, cols: 4, cell: 512, pad: 32, slots: { thatch: 0, shingle: 1, plaster: 2, wood: 3, tile: 4, rubble: 5, ashlar: 6 } };
+const ATLAS_PAINT = { thatch: [THATCH, 6.0], shingle: [SHINGLE, 6.0], plaster: [PLASTER, 3.0], wood: [WOOD, 4.0], tile: [TILE, 7.0], rubble: [RUBBLE, 7.0], ashlar: [ASHLAR, 4.0] };
 
 // returns { rock, sward, dirt, atlas: { albedo, normal, targets } } — repeating (terrain) and atlased (building)
 // mipmapped textures

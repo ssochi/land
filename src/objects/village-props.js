@@ -8,7 +8,7 @@ import { MB, V3, addBlob, addPetal } from './mesh-builder.js';
 import { quad, box, beam } from './buildings.js';
 
 const C = hex => new THREE.Color(hex);
-const WOOD = C('#a7825e'), WOOD_D = C('#6b4d36'), IRON = C('#3b3a38'), STONE = C('#b2a796'), GLOW = C('#ffd9a0');
+const WOOD = C('#a7825e'), WOOD_D = C('#6b4d36'), IRON = C('#3b3a38'), STONE = C('#b2a796'), GLOW = C('#ffd9a0'), PLASTER = C('#ecdcbc');
 
 // cylinder along axis 'y' (upright), 'x' or 'z' (lying); uv u around, v along; card 7 wood by default
 function cyl(mb, cx, cy, cz, r, h, segs, col, card = 7, axis = 'y', capCol = null) {
@@ -168,9 +168,9 @@ export function makeWindmill(seed, lod = 0) {
   const mb = new MB(), H = 9, r0 = 2.4, r1 = 1.7, sides = 8, hub = H + 0.9;
   for (let i = 0; i < sides; i++) {
     const a0 = (i + 0.5) / sides * Math.PI * 2, a1 = (i + 1.5) / sides * Math.PI * 2, am = (a0 + a1) / 2;
-    quad(mb, V3(Math.cos(a0) * r0, 0, Math.sin(a0) * r0), V3(Math.cos(a1) * r0, 0, Math.sin(a1) * r0), V3(Math.cos(a1) * r1, H, Math.sin(a1) * r1), V3(Math.cos(a0) * r1, H, Math.sin(a0) * r1), STONE, 2, V3(Math.cos(am), 0, Math.sin(am)));
+    quad(mb, V3(Math.cos(a0) * r0, 0, Math.sin(a0) * r0), V3(Math.cos(a1) * r0, 0, Math.sin(a1) * r0), V3(Math.cos(a1) * r1, H, Math.sin(a1) * r1), V3(Math.cos(a0) * r1, H, Math.sin(a0) * r1), PLASTER, 8, V3(Math.cos(am), 0, Math.sin(am)));
   }
-  box(mb, 0, -0.4, 0, r0 * 2.1, 0.9, r0 * 2.1, STONE.clone().multiplyScalar(0.85), 2);
+  box(mb, 0, -0.4, 0, r0 * 2.1, 0.9, r0 * 2.1, STONE.clone().multiplyScalar(0.85), 10);
   // cap: an eight-sided cone of shingles
   for (let i = 0; i < sides; i++) {
     const a0 = (i + 0.5) / sides * Math.PI * 2, a1 = (i + 1.5) / sides * Math.PI * 2, am = (a0 + a1) / 2, rr = r1 + 0.35;

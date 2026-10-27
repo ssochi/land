@@ -3,7 +3,7 @@
 // rafter tails and purlin ends), a tall tapering chimney propped with poles, round towers with conical roofs,
 // small shuttered windows with flower boxes, a plank door under a little canopy with a wall lamp, cloth banners.
 //   hateno  stucco, clay tile roof, tall chimney against a gable (the default look)
-//   stone   coursed stone walls, clay tile roof, a stone stack through the roof
+//   stone   rubble-stone walls with dressed quoins, clay tile roof, a stone stack through the roof
 //   timber  white plaster in a dark timber frame, wooden shingle roof
 //   hut     small weathered plank hut with a thatch roof
 // front: 'eave' puts the long side (and the door) to the street, 'gable' turns a gable end to it.
@@ -11,20 +11,20 @@
 // mullions; lod 2 is walls, roof, chimney and tower only. The model faces +z (front door) with its footprint
 // centred on the origin. Surfaces carry uv in metres and a material card for the prop shader
 // (0 vertex colour · 2 masonry · 3 rock · 4 thatch · 5 shingle · 6 lit glass · 7 wood · 8 stucco · 9 clay tile ·
-// 10 rubble stone · 11 lamp glass).
+// 10 rubble stone · 11 lamp glass · 13 dressed stone).
 // On a slope the house stands on its stone base: base is how far the base reaches below the floor's ground
 // level, lift raises the model above the ground at its centre, steps is the drop to the ground at the door
 // (a flight of stone steps is built for it).
 // userData: colliders (circles), smoke (chimney tops), lights (lamps: position + radius), footprint, door.
 import * as THREE from 'three';
 import { mulberry32 } from '../core/math.js';
-import { MB, V3, addBlob } from './mesh-builder.js';
+import { MB, V3 } from './mesh-builder.js';
 
 const C = hex => new THREE.Color(hex);
 const STONE = C('#bfae92'), TIMBER = C('#5e4532'), TIMBER_L = C('#86664a'), IRON = C('#33312e'), GLOW = C('#ffd9a0');
 const TILE_C = C('#ffffff'), THATCH_C = C('#ffffff'), SHINGLE_T = [C('#c49a7a'), C('#8a95a6'), C('#a57d64')];
-const WASH = { hateno: ['#ead08e', '#f0ddb0', '#f2e6cc', '#e8c99c', '#e3c27c'], stone: ['#c9bda8'], timber: ['#f2ece0'], hut: ['#a8957c'] };
-const SHUTTER = [C('#3d4c49'), C('#45566b'), C('#5a4535'), C('#4c5a3b'), C('#6a3f3a')];
+const WASH = { hateno: ['#e6c47e', '#edd49c', '#ecd8b0', '#e4bf8c', '#ddb56c'], stone: ['#c4b49a'], timber: ['#f2ece0'], hut: ['#a8957c'] };
+const SHUTTER = [C('#4e6a58'), C('#53708e'), C('#6c533f'), C('#5d7448'), C('#7d4b43')];
 const BANNER = [C('#a3456b'), C('#5f7f3f'), C('#3f5f8f'), C('#b0703a')];
 const BLOOM = [C('#ee7a2a'), C('#d8402f'), C('#e8c33a'), C('#e070a0'), C('#f2efe6')];
 const POT = [C('#3f8f8a'), C('#4f7fa0'), C('#a0603f')];
@@ -40,15 +40,15 @@ export function quad(mb, P0, P1, P2, P3, col, card, out, uv0 = [0, 0], sw = 0) {
   if (flip) { mb.tri(ids[0], ids[2], ids[1]); mb.tri(ids[0], ids[3], ids[2]); } else { mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]); }
 }
 
-// axis-aligned box (rotated by rot about y around its centre); faces get uv in metres; sw goes to aSway
-// (wind sway weight, or the hub height for windmill rotor parts)
-export function box(mb, cx, cy, cz, sx, sy, sz, col, card, rot = 0, topCol = null, sw = 0) {
-  const c = Math.cos(rot), s = Math.sin(rot), hx = sx / 2, hy = sy / 2, hz = sz / 2;
+// axis-aligned box (rotated by rot about y around its centre); faces get uv in metres (side faces' v from v0);
+// sw goes to aSway (wind sway weight, or the hub height for windmill rotor parts)
+export function box(mb, cx, cy, cz, sx, sy, sz, col, card, rot = 0, topCol = null, sw = 0, v0 = 0) {
+  const c = Math.cos(rot), s = Math.sin(rot), hx = sx / 2, hy = sy / 2, hz = sz / 2, uv = [0, v0];
   const P = (x, y, z) => V3(cx + x * c - z * s, cy + y, cz + x * s + z * c), N = (x, y, z) => V3(x * c - z * s, y, x * s + z * c);
-  quad(mb, P(-hx, -hy, hz), P(hx, -hy, hz), P(hx, hy, hz), P(-hx, hy, hz), col, card, N(0, 0, 1), undefined, sw);
-  quad(mb, P(hx, -hy, -hz), P(-hx, -hy, -hz), P(-hx, hy, -hz), P(hx, hy, -hz), col, card, N(0, 0, -1), undefined, sw);
-  quad(mb, P(hx, -hy, hz), P(hx, -hy, -hz), P(hx, hy, -hz), P(hx, hy, hz), col, card, N(1, 0, 0), undefined, sw);
-  quad(mb, P(-hx, -hy, -hz), P(-hx, -hy, hz), P(-hx, hy, hz), P(-hx, hy, -hz), col, card, N(-1, 0, 0), undefined, sw);
+  quad(mb, P(-hx, -hy, hz), P(hx, -hy, hz), P(hx, hy, hz), P(-hx, hy, hz), col, card, N(0, 0, 1), uv, sw);
+  quad(mb, P(hx, -hy, -hz), P(-hx, -hy, -hz), P(-hx, hy, -hz), P(hx, hy, -hz), col, card, N(0, 0, -1), uv, sw);
+  quad(mb, P(hx, -hy, hz), P(hx, -hy, -hz), P(hx, hy, -hz), P(hx, hy, hz), col, card, N(1, 0, 0), uv, sw);
+  quad(mb, P(-hx, -hy, -hz), P(-hx, -hy, hz), P(-hx, hy, hz), P(-hx, hy, -hz), col, card, N(-1, 0, 0), uv, sw);
   quad(mb, P(-hx, hy, hz), P(hx, hy, hz), P(hx, hy, -hz), P(-hx, hy, -hz), topCol || col, card, N(0, 1, 0), undefined, sw);
   quad(mb, P(-hx, -hy, -hz), P(hx, -hy, -hz), P(hx, -hy, hz), P(-hx, -hy, hz), col, card, N(0, -1, 0), undefined, sw);
 }
@@ -65,6 +65,28 @@ export function obox(mb, c, ax, ay, az, sx, sy, sz, col, card) {
   quad(mb, P(-1, -1, -1), P(-1, -1, 1), P(-1, 1, 1), P(-1, 1, -1), col, card, nx);
 }
 
+// box on axes ax ay az (as obox) with its edges and corners chamfered by b: the bevels catch the light the way
+// dressed stone does, where a sharp box looks machined
+export function bevelBox(mb, c, ax, ay, az, sx, sy, sz, b, col, card) {
+  const h = [sx / 2, sy / 2, sz / 2], A = [ax, ay, az], pt = v => c.clone().addScaledVector(ax, v[0]).addScaledVector(ay, v[1]).addScaledVector(az, v[2]);
+  for (let i = 0; i < 3; i++) for (const s of [-1, 1]) {   // faces, inset by b
+    const j = (i + 1) % 3, k = (i + 2) % 3, q = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, w]) => { const v = [0, 0, 0]; v[i] = s * h[i]; v[j] = u * (h[j] - b); v[k] = w * (h[k] - b); return pt(v); });
+    quad(mb, q[0], q[1], q[2], q[3], col, card, A[i].clone().multiplyScalar(s));
+  }
+  for (let i = 0; i < 3; i++) for (const si of [-1, 1]) for (const sj of [-1, 1]) {   // edge chamfers between faces i and j
+    const j = (i + 1) % 3, k = (i + 2) % 3;
+    const q = [[1, -1], [0, -1], [0, 1], [1, 1]].map(([onI, w]) => { const v = [0, 0, 0]; v[i] = si * (onI ? h[i] : h[i] - b); v[j] = sj * (onI ? h[j] - b : h[j]); v[k] = w * (h[k] - b); return pt(v); });
+    quad(mb, q[0], q[1], q[2], q[3], col.clone().multiplyScalar(1.04), card, A[i].clone().multiplyScalar(si).addScaledVector(A[j], sj));
+  }
+  for (const s0 of [-1, 1]) for (const s1 of [-1, 1]) for (const s2 of [-1, 1]) {   // corner facets
+    const s = [s0, s1, s2], tri = [0, 1, 2].map(i => pt(s.map((si, a) => si * (a === i ? h[a] : h[a] - b))));
+    const out = ax.clone().multiplyScalar(s0).addScaledVector(ay, s1).addScaledVector(az, s2), n = tri[1].clone().sub(tri[0]).cross(tri[2].clone().sub(tri[0]));
+    const flip = n.dot(out) < 0; n.normalize(); if (flip) n.negate();
+    const ids = tri.map(p => mb.v(p.x, p.y, p.z, n.x, n.y, n.z, col, 0, 0, 0, card));
+    if (flip) mb.tri(ids[0], ids[2], ids[1]); else mb.tri(ids[0], ids[1], ids[2]);
+  }
+}
+
 // a beam from A to B with a square section t; the section is rolled to keep one face toward `up`
 export function beam(mb, A, B, t, col = TIMBER, card = 7, up = V3(0, 1, 0), t2 = t) {
   const ax = B.clone().sub(A), len = ax.length(); ax.divideScalar(len || 1);
@@ -75,22 +97,25 @@ export function beam(mb, A, B, t, col = TIMBER, card = 7, up = V3(0, 1, 0), t2 =
 
 // surface of revolution about the vertical axis through (cx, cz): profile [[r, y], …]; o.sq > 2 squares the
 // section off (superellipse), o.sx / o.sz stretch it, o.shade(j) darkens profile row j, o.flipV runs v from the
-// top down (roof tiles need v down the slope). Smooth normals; uv: u around in metres, v along the profile.
+// top down (roof tiles need v down the slope), o.v0 offsets v. Smooth normals; uv: u around in metres, v along
+// the profile.
 export function lathe(mb, cx, cz, prof, segs, col, card, o = {}) {
   const sq = o.sq || 2, sx = o.sx || 1, sz = o.sz || 1, rot = o.rot || 0;
   const dirs = [];
   for (let i = 0; i <= segs; i++) {
     const a = rot + i / segs * Math.PI * 2, c = Math.cos(a), s = Math.sin(a), k = Math.pow(Math.pow(Math.abs(c), sq) + Math.pow(Math.abs(s), sq), -1 / sq);
-    dirs.push([c * k * sx, s * k * sz, c / sx, s / sz, i / segs]);
+    // normal of the superellipse |x|^sq + |z|^sq = 1 (a squared-off section shades as flat sides, not a cylinder)
+    const gx = Math.sign(c) * Math.pow(Math.abs(c * k), sq - 1) / sx, gz = Math.sign(s) * Math.pow(Math.abs(s * k), sq - 1) / sz, gl = Math.hypot(gx, gz) || 1;
+    dirs.push([c * k * sx, s * k * sz, gx / gl, gz / gl, i / segs]);
   }
   const sn = [];
   for (let j = 0; j < prof.length - 1; j++) { const dr = prof[j + 1][0] - prof[j][0], dy = prof[j + 1][1] - prof[j][1], l = Math.hypot(dr, dy) || 1; sn.push([dy / l, -dr / l, l]); }
   const total = sn.reduce((a, s) => a + s[2], 0), rmax = Math.max(...prof.map(p => p[0])) * Math.max(sx, sz);
-  let v = 0;
+  let v = o.v0 || 0;
   for (let j = 0; j < sn.length; j++) {
     const [r0, y0] = prof[j], [r1, y1] = prof[j + 1], n = sn[j];
     const c0 = o.shade ? col.clone().multiplyScalar(o.shade(j)) : col, c1 = o.shade ? col.clone().multiplyScalar(o.shade(j + 1)) : col;
-    const base = mb.p.length / 3, v0 = o.flipV ? total - v : v, v1 = o.flipV ? total - v - n[2] : v + n[2];
+    const base = mb.p.length / 3, v0 = o.flipV ? total - v : v, v1 = o.flipV ? total - v - n[2] : v + n[2];   // (flipV ignores v0)
     for (let i = 0; i <= segs; i++) {
       const [x, z, nxr, nzr, t] = dirs[i], nl = Math.hypot(nxr * n[0], n[1], nzr * n[0]) || 1, u = t * Math.PI * 2 * rmax;
       mb.v(cx + x * r0, y0, cz + z * r0, nxr * n[0] / nl, n[1] / nl, nzr * n[0] / nl, c0, 0, u, v0, card);
@@ -98,6 +123,45 @@ export function lathe(mb, cx, cz, prof, segs, col, card, o = {}) {
     }
     for (let i = 0; i < segs; i++) { const a = base + i * 2; mb.tri(a, a + 1, a + 2); mb.tri(a + 1, a + 3, a + 2); }
     v += n[2];
+  }
+}
+
+// four-sided pyramid (a hipped cap) on the square of half-width `half` centred at (cx, y, cz), apex h above it
+export function pyramid(mb, cx, y, cz, half, h, col, card) {
+  const apex = V3(cx, y + h, cz);
+  for (const [ax, az] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
+    const a = V3(cx + (ax - az) * half, y, cz + (az + ax) * half), b = V3(cx + (ax + az) * half, y, cz + (az - ax) * half);
+    const e = b.clone().sub(a).cross(apex.clone().sub(a)), out = V3(ax, 0.6, az), n = e.clone().normalize();
+    if (n.dot(out) < 0) n.negate();
+    const sl = Math.hypot(half, h), ia = mb.v(a.x, a.y, a.z, n.x, n.y, n.z, col, 0, 0, sl, card), ib = mb.v(b.x, b.y, b.z, n.x, n.y, n.z, col, 0, 2 * half, sl, card), ic = mb.v(apex.x, apex.y, apex.z, n.x, n.y, n.z, col, 0, half, 0, card);
+    if (e.dot(out) > 0) mb.tri(ia, ib, ic); else mb.tri(ia, ic, ib);
+  }
+}
+
+// a window box's planting at c (the soil, box along ax, out of the wall along on, w long): small leaves fanning up
+// and out over the front, two-sided and lit from above, with five-petalled flowers among them
+const LEAF_G = C('#4c7f2e');
+function planter(mb, c, ax, on, w, bloom, R) {
+  const up = V3(0, 1, 0), nUp = V3(on.x * 0.35, 1, on.z * 0.35).normalize();
+  for (let k = 0, n = Math.round(w * 80); k < n; k++) {
+    const p = c.clone().addScaledVector(ax, (R() - 0.5) * w * 0.95).addScaledVector(on, (R() - 0.6) * 0.16);
+    const d = up.clone().multiplyScalar(0.5 + R() * 0.6).addScaledVector(on, 0.15 + R() * 0.7).addScaledVector(ax, (R() - 0.5) * 1.1).normalize();
+    const side = d.clone().cross(on); if (side.lengthSq() < 0.05) side.copy(ax); side.normalize();
+    const l = 0.1 + R() * 0.09, m = p.clone().addScaledVector(d, l * 0.45), tip = p.clone().addScaledVector(d, l);
+    const col = LEAF_G.clone().multiplyScalar(0.7 + R() * 0.4 + 0.25 * d.y), ids = [p, m.clone().addScaledVector(side, l * 0.3), tip, m.clone().addScaledVector(side, -l * 0.3)].map(q => mb.v(q.x, q.y, q.z, nUp.x, nUp.y, nUp.z, col, 0, 0, 0, 0));
+    mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]); mb.tri(ids[0], ids[2], ids[1]); mb.tri(ids[0], ids[3], ids[2]);
+  }
+  for (let k = 0, n = Math.round(w * 26); k < n; k++) {
+    const q = c.clone().addScaledVector(ax, (R() - 0.5) * w * 0.9).addScaledVector(on, 0.04 + R() * 0.14).addScaledVector(up, 0.07 + R() * 0.12);
+    const f = on.clone().multiplyScalar(0.8).addScaledVector(up, 0.6 + R() * 0.4).addScaledVector(ax, (R() - 0.5) * 0.6).normalize();
+    const t1 = f.clone().cross(up); if (t1.lengthSq() < 0.05) t1.copy(ax); t1.normalize(); const t2 = f.clone().cross(t1);
+    const r = 0.045 + R() * 0.025, col = bloom.clone().multiplyScalar(0.88 + R() * 0.24), rot = R() * 6.283;
+    const ctr = mb.v(q.x, q.y, q.z, f.x, f.y, f.z, C('#e8c040'), 0, 0, 0, 0), rim = [];
+    for (let j = 0; j < 10; j++) {   // five petals: a ten-point star, every other point out at the petal tip
+      const a = rot + j / 10 * 6.283, rr = j % 2 ? r * 0.45 : r, P = q.clone().addScaledVector(t1, Math.cos(a) * rr).addScaledVector(t2, Math.sin(a) * rr);
+      rim.push(mb.v(P.x, P.y, P.z, f.x, f.y, f.z, col, 0, 0, 0, 0));
+    }
+    for (let j = 0; j < 10; j++) { mb.tri(ctr, rim[j], rim[(j + 1) % 10]); mb.tri(ctr, rim[(j + 1) % 10], rim[j]); }
   }
 }
 
@@ -116,7 +180,7 @@ export function houseParams(seed, p = {}) {
   if (chimney === true) chimney = style === 'hateno' && u[7] < 0.85 ? 'tall' : 'stack';
   const tower = typeof p.tower === 'number' ? p.tower : p.tower != null ? (p.tower ? 1.45 + u[9] * 0.45 : 0) : style === 'hateno' && u[8] < 0.3 ? 1.45 + u[9] * 0.45 : 0;
   const towerSide = p.towerSide || (u[10] < 0.5 ? -1 : 1), chimSide = p.chimSide || (tower ? -towerSide : u[11] < 0.5 ? -1 : 1);
-  const banner = p.banner != null ? !!p.banner : !hut && u[12] < 0.35;
+  const banner = p.banner != null ? !!p.banner : !hut && u[12] < 0.35, quoins = p.quoins != null ? !!p.quoins : style === 'hateno' && u[17] < 0.45;
   const porch = p.porch != null ? !!p.porch : (style === 'stone' || style === 'timber') && u[13] < 0.45;
   const tint = p.tint != null ? p.tint : Math.floor(u[14] * 5), washes = WASH[style] || WASH.hateno;
   const wash = p.wash || washes[Math.floor(u[15] * washes.length)];
@@ -127,7 +191,7 @@ export function houseParams(seed, p = {}) {
   let ex = L + 1.2 + (chimney === 'tall' ? 2.2 : 0), ez = D + 1.6 + (tower ? 1.6 : 0) + (porch ? 1.6 : 0);
   if (front === 'gable') [ex, ez] = [ez, ex];
   return { style, front, width: +width.toFixed(2), depth: +depth.toFixed(2), floors, roof, pitch: +pitch.toFixed(1), chimney: chimney || false,
-    tower: +tower.toFixed(2), towerSide, chimSide, banner, porch, tint, wash, doorA: +doorA.toFixed(2),
+    tower: +tower.toFixed(2), towerSide, chimSide, banner, quoins, porch, tint, wash, doorA: +doorA.toFixed(2),
     door: [+doorA.toFixed(2), +(depth / 2 + (porch ? 2.7 : 1.3)).toFixed(2)], lot: [+ex.toFixed(2), +ez.toFixed(2)],
     base: p.base || 1.2, lift: p.lift || 0, steps: p.steps || 0 };
 }
@@ -139,7 +203,7 @@ export function makeHouse(seed, lod = 0, params = {}) {
   // (where the door goes) faces +z
   const L = gable ? P.depth : P.width, D = gable ? P.width : P.depth, hx = L / 2, hz = D / 2;
   const y0 = hut ? 0.35 : 0.55, fh = hut ? 2.4 : 2.85, yW = y0 + floors * fh;
-  const wash = C(P.wash), wallCard = style === 'stone' ? 2 : hut ? 7 : 8, shut = SHUTTER[P.tint % SHUTTER.length];
+  const wash = C(P.wash), wallCard = style === 'stone' ? 10 : hut ? 7 : 8, shut = SHUTTER[P.tint % SHUTTER.length];
   const ud = { colliders: [], smoke: [], lights: [], footprint: [P.width, P.depth], door: [0, 0] };
   const doorFace = gable ? 'r' : 'f', len = f => (f === 'f' || f === 'b' ? L : D);
   const tp = Math.tan(pitch * Math.PI / 180), cp = Math.cos(pitch * Math.PI / 180), sp = Math.sin(pitch * Math.PI / 180);
@@ -165,85 +229,121 @@ export function makeHouse(seed, lod = 0, params = {}) {
   // where the chimney and tower stand (roof frame), so windows keep clear of them; a gable-front house keeps its
   // chimney on the back gable
   const sc = P.chimSide, rT = P.tower, ts = P.towerSide;
-  const chim = P.chimney === 'tall' ? { x: (gable ? -1 : sc) * (hx + 0.68), z: (R() < 0.5 ? -1 : 1) * (0.95 + R() * 0.35) } : null;
+  const chim = P.chimney === 'tall' ? { x: (gable ? -1 : sc) * (hx + 0.55), z: (R() < 0.5 ? -1 : 1) * (0.95 + R() * 0.35) } : null;
   const tower = rT ? (gable ? { x: -(hx - 0.2 * rT), z: ts * (hz - 0.3 * rT) } : { x: ts * (hx - 0.3 * rT), z: -(hz - 0.2 * rT) }) : null;
   if (chim && tower && gable) chim.z = -Math.sign(tower.z) * Math.abs(chim.z);
   const blocked = (x, z, m = 0.5) => (chim && Math.hypot(x - chim.x, z - chim.z) < 1.0 + m) || (tower && Math.hypot(x - tower.x, z - tower.z) < rT + m);
 
-  // ── stone base: a rubble band down into the ground (so slopes never show a gap), ragged stones on top ──
-  box(mb, 0, (y0 + 0.05 + yB) / 2, 0, L + 0.16, y0 + 0.05 - yB, D + 0.16, STONE.clone().multiplyScalar(0.92), 10);
-  if (lod === 0 && !hut) for (const f of ['f', 'b', 'l', 'r']) {
-    const ln = len(f) + 0.16;
-    for (let a = -ln / 2; a < ln / 2 - 0.15;) {
-      const sw = Math.min(0.32 + R() * 0.5, ln / 2 - a), sh = 0.2 + R() * 0.22, top = y0 + 0.02 + R() * (R() < 0.25 ? 0.42 : 0.14);
-      if (R() < 0.3) { a += sw; continue; }   // gaps keep the top edge ragged
-      const c = onWall(f, a + sw / 2, top - sh / 2, 0.06 + R() * 0.05), ax = alongV(f);
-      box(mb, c.x, c.y, c.z, sw - 0.04, sh, 0.14, STONE.clone().multiplyScalar(0.7 + R() * 0.22), 10, Math.atan2(-ax.z, ax.x) + (R() - 0.5) * 0.08);
-      a += sw;
-    }
-  }
+  // ── stone base: a rubble band down into the ground (so slopes never show a gap), nearly flush with the stucco;
+  // where the plaster has worn off above it, the prop shader shows the same stonework ──
+  box(mb, 0, (y0 + 0.05 + yB) / 2, 0, L + 0.04, y0 + 0.05 - yB, D + 0.04, STONE.clone().multiplyScalar(0.92), 10);
 
-  // ── walls, darker toward the ground and under the eaves ──
-  const wallFace = (A, B, out, rows) => {
-    const ux = B.x - A.x, uz = B.z - A.z, lu = Math.hypot(ux, uz), ids = [];
-    for (const [y, k] of rows) { const c = wash.clone().multiplyScalar(k); ids.push([mb.v(A.x, y, A.z, out.x, 0, out.z, c, 0, 0, y, wallCard), mb.v(B.x, y, B.z, out.x, 0, out.z, c, 0, lu, y, wallCard)]); }
-    const fwd = -uz * out.x + ux * out.z > 0;
-    for (let k = 0; k < ids.length - 1; k++) {
-      const [a, b] = ids[k], [d, c] = ids[k + 1];
-      if (fwd) { mb.tri(a, b, c); mb.tri(a, c, d); } else { mb.tri(a, c, b); mb.tri(a, d, c); }
-    }
-  };
-  const eaveRows = [[y0 - 0.05, 0.84], [y0 + 0.6, 0.98], [yW - 0.9, 0.98], [yW, 0.78]], gableRows = [[y0 - 0.05, 0.84], [y0 + 0.6, 0.98], [yW, 0.95]];
-  wallFace(V3(-hx, 0, hz), V3(hx, 0, hz), V3(0, 0, 1), eaveRows);
-  wallFace(V3(hx, 0, -hz), V3(-hx, 0, -hz), V3(0, 0, -1), eaveRows);
-  wallFace(V3(hx, 0, hz), V3(hx, 0, -hz), V3(1, 0, 0), gableRows);
-  wallFace(V3(-hx, 0, -hz), V3(-hx, 0, hz), V3(-1, 0, 0), gableRows);
-  for (const sx of [1, -1]) {   // gable triangles, shaded toward the apex under the roof
-    const x = sx * hx, n = V3(sx, 0, 0), pts = [[-hz, yW, 0.95], [hz, yW, 0.95], [0, ridgeU, 0.7]];
-    const ids = pts.map(([z, y, k]) => mb.v(x, y, z, n.x, 0, 0, wash.clone().multiplyScalar(k), 0, -sx * z, y, wallCard));
-    if (sx > 0) mb.tri(ids[0], ids[2], ids[1]); else mb.tri(ids[0], ids[1], ids[2]);
-  }
-  if (style === 'stone' && lod < 2) for (const [qx, qz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) for (let y = y0, k = 0; y < yW - 0.2; y += 0.55, k++)   // quoins
-    box(mb, qx * (hx - 0.16), y + 0.26, qz * (hz - 0.16), k % 2 ? 0.4 : 0.56, 0.5, k % 2 ? 0.56 : 0.4, STONE.clone().multiplyScalar(1.05), 3);
-
-  // ── openings: the door, windows along each wall per floor, a small window high in the gables ──
+  // ── openings: the door, windows along each wall per floor (small, as on Hateno's thick-walled houses), a small
+  // window high in the gables ──
   const doorA = P.doorA;
   const openings = [];
   for (let fl = 0; fl < floors; fl++) {
-    const sill = y0 + fl * fh + (fl === 0 ? 1.0 : 0.95);
+    const sill = y0 + fl * fh + (fl === 0 ? 1.05 : 0.95);
     for (const f of ['f', 'b', 'l', 'r']) {
       const ln = len(f), n = Math.max(1, Math.floor((ln - 1.0) / 2.5));
       if ((f === 'l' || f === 'r') && f !== doorFace && R() < 0.3) continue;
       for (let k = 0; k < n; k++) {
         const a = -ln / 2 + (k + 0.5) * ln / n, c = onWall(f, a, sill, 0);
         if ((f === doorFace && fl === 0 && Math.abs(a - doorA) < 1.35) || R() < 0.12 || blocked(c.x, c.z)) continue;
-        openings.push({ f, a, y: sill, ww: hut ? 0.6 : 0.78, wh: fl === 0 ? 0.95 : 0.85 });
+        openings.push({ f, a, y: sill, ww: hut ? 0.56 : 0.66, wh: fl === 0 ? 0.82 : 0.76 });
       }
     }
   }
   if (!hut && hz * tp > 1.2) for (const f of ['l', 'r']) {
     const c = onWall(f, 0, yW + 0.3, 0);
-    if (R() < (f === doorFace ? 0.95 : 0.6) && !blocked(c.x, c.z)) openings.push({ f, a: 0, y: yW + 0.22, ww: 0.48, wh: 0.58, small: true });
+    if (R() < (f === doorFace ? 0.95 : 0.6) && !blocked(c.x, c.z)) openings.push({ f, a: 0, y: yW + 0.22, ww: 0.44, wh: 0.54, small: true });
+  }
+  const door = { w: hut ? 0.95 : 1.08, h: hut ? 1.9 : 2.1 };
+
+  // ── walls: faces with holes cut for the door and the windows (deep plaster reveals), shaded darker toward the
+  // ground and under the eaves, their corners softly rounded by a narrow strip whose normals turn the corner ──
+  const CH = hut ? 0 : 0.07;
+  const eaveRows = [[y0 - 0.05, 0.92], [y0 + 0.6, 0.99], [yW - 0.9, 0.98], [yW, 0.8]], gableRows = [[y0 - 0.05, 0.92], [y0 + 0.6, 0.99], [yW, 0.95]];
+  const rowsOf = f => (f === 'f' || f === 'b' ? eaveRows : gableRows);
+  const shadeAt = (rows, y) => {
+    for (let k = 1; k < rows.length; k++) if (y <= rows[k][0]) { const [ya, ka] = rows[k - 1], [yb, kb] = rows[k]; return ka + (kb - ka) * Math.max(0, y - ya) / (yb - ya); }
+    return rows[rows.length - 1][1];
+  };
+  const vf = y0 - 0.05;   // stucco v is the height above the wall's foot (the prop shader wears the plaster off there)
+  const wv = (P, n, k, u, v) => mb.v(P.x, P.y, P.z, n.x, n.y, n.z, wash.clone().multiplyScalar(k), 0, u, v - vf, wallCard);
+  const holes = { f: [], b: [], l: [], r: [] };
+  if (lod < 2) {
+    for (const o of openings) if (!o.small) holes[o.f].push({ a0: o.a - o.ww / 2, a1: o.a + o.ww / 2, y0: o.y, y1: o.y + o.wh, dp: 0.24, sill: true });
+    holes[doorFace].push({ a0: doorA - door.w / 2, a1: doorA + door.w / 2, y0: y0 - 0.05, y1: y0 + door.h, dp: 0.16 });
+  }
+  for (const f of ['f', 'r', 'b', 'l']) {
+    const rows = rowsOf(f), half = len(f) / 2, n = outN(f), a0 = -half + CH, a1 = half - CH;
+    const ys = [...new Set([...rows.map(r => r[0]), ...holes[f].flatMap(h => [h.y0, h.y1])])].sort((p, q) => p - q);
+    const q = (x0, x1, ya, yb) => {
+      const ids = [[x0, ya], [x1, ya], [x1, yb], [x0, yb]].map(([a, y]) => wv(onWall(f, a, y, 0), n, shadeAt(rows, y), a + half, y));
+      mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]);
+    };
+    for (let k = 0; k < ys.length - 1; k++) {
+      const ya = ys[k], yb = ys[k + 1], ym = (ya + yb) / 2;
+      let x = a0;
+      for (const h of holes[f].filter(h => h.y0 < ym && h.y1 > ym).sort((p, r) => p.a0 - r.a0)) { if (h.a0 > x) q(x, h.a0, ya, yb); x = Math.max(x, h.a1); }
+      if (a1 > x) q(x, a1, ya, yb);
+    }
+    for (const h of holes[f]) {   // reveals: sides, head and sill, set back dp, darker inside
+      const al = alongV(f), W = (a, y, o) => onWall(f, a, y, o);
+      quad(mb, W(h.a0, h.y0, 0), W(h.a0, h.y0, -h.dp), W(h.a0, h.y1, -h.dp), W(h.a0, h.y1, 0), wash.clone().multiplyScalar(0.86), wallCard, al, [0, h.y0 - vf]);
+      quad(mb, W(h.a1, h.y0, 0), W(h.a1, h.y0, -h.dp), W(h.a1, h.y1, -h.dp), W(h.a1, h.y1, 0), wash.clone().multiplyScalar(0.86), wallCard, al.clone().negate(), [0, h.y0 - vf]);
+      quad(mb, W(h.a0, h.y1, 0), W(h.a1, h.y1, 0), W(h.a1, h.y1, -h.dp), W(h.a0, h.y1, -h.dp), wash.clone().multiplyScalar(0.68), wallCard, V3(0, -1, 0), [0, h.y1 - vf]);
+      if (h.sill) quad(mb, W(h.a0, h.y0, 0), W(h.a1, h.y0, 0), W(h.a1, h.y0, -h.dp), W(h.a0, h.y0, -h.dp), wash.clone().multiplyScalar(0.95), wallCard, V3(0, 1, 0), [0, h.y0 - vf]);
+    }
+  }
+  if (CH) for (const [f1, f2] of [['f', 'r'], ['r', 'b'], ['b', 'l'], ['l', 'f']]) {
+    const r1 = rowsOf(f1), r2 = rowsOf(f2), h1 = len(f1) / 2, h2 = len(f2) / 2, ids = [];
+    for (const y of [...new Set([...r1, ...r2].map(r => r[0]))].sort((p, q) => p - q))
+      ids.push([wv(onWall(f1, h1 - CH, y, 0), outN(f1), shadeAt(r1, y), 2 * h1 - CH, y), wv(onWall(f2, -h2 + CH, y, 0), outN(f2), shadeAt(r2, y), 2 * h1 - CH * 0.6, y)]);
+    for (let k = 0; k < ids.length - 1; k++) { const [a, b] = ids[k], [d, c] = ids[k + 1]; mb.tri(a, b, c); mb.tri(a, c, d); }
+  }
+  for (const sx of [1, -1]) {   // gable triangles, shaded toward the apex under the roof
+    const x = sx * hx, n = V3(sx, 0, 0), pts = [[-(hz - CH), yW, 0.95], [hz - CH, yW, 0.95], [0, ridgeU, 0.7]];
+    const ids = pts.map(([z, y, k]) => mb.v(x, y, z, n.x, 0, 0, wash.clone().multiplyScalar(k), 0, hz - sx * z, y - vf, wallCard));
+    if (sx > 0) mb.tri(ids[0], ids[2], ids[1]); else mb.tri(ids[0], ids[1], ids[2]);
+  }
+  // quoins: dressed stones up the corners, long and short in turn, standing a little proud of the wall
+  if ((style === 'stone' || P.quoins) && lod < 2) for (const [f1, f2] of [['f', 'r'], ['r', 'b'], ['b', 'l'], ['l', 'f']]) {
+    const h1 = len(f1) / 2, a1 = alongV(f1), a2 = alongV(f2), t = 0.035, cn = onWall(f1, h1, 0, 0);
+    if (blocked(cn.x, cn.z, 0.4)) continue;
+    for (let y = y0 + 0.02, k = 0; y < yW - 0.3; k++) {
+      const bh = 0.27 + R() * 0.07, l1 = (k % 2 ? 0.3 : 0.52) + R() * 0.06, l2 = (k % 2 ? 0.52 : 0.3) + R() * 0.06;
+      const c = onWall(f1, h1, y + bh / 2, 0).addScaledVector(a1, (t - l1) / 2).addScaledVector(a2, (l2 - t) / 2);
+      const qc = STONE.clone().multiplyScalar(0.98 + R() * 0.12);
+      if (lod === 0) bevelBox(mb, c, a1, V3(0, 1, 0), a2, l1 + t, bh, l2 + t, 0.03, qc, 13); else obox(mb, c, a1, V3(0, 1, 0), a2, l1 + t, bh, l2 + t, qc, 13);
+      y += bh + 0.025;
+    }
   }
 
-  // door: planked leaf in a heavy frame, a stone step, a canopy on brackets and a wall lamp
-  const door = { w: hut ? 0.95 : 1.08, h: hut ? 1.9 : 2.1 };
-  panel(doorFace, doorA, y0, door.w, door.h, 0.03, TIMBER_L.clone().multiplyScalar(0.85), 7, true);
+  // door: a planked leaf set back in its reveal behind a heavy frame, iron strap hinges, a stone step (or a
+  // flight down to the ground), a canopy on brackets and a wall lamp
+  const dDp = lod < 2 ? 0.16 : -0.03;
+  panel(doorFace, doorA, y0, door.w, door.h, -dDp, TIMBER_L.clone().multiplyScalar(0.85), 7, true);
   const dO = outN(doorFace), dAl = alongV(doorFace);
   if (lod < 2) {
     for (const s of [-1, 1]) slat(doorFace, doorA + s * (door.w / 2 + 0.08), y0, 0.16, door.h + 0.1, 0, 0.13, TIMBER);
     slat(doorFace, doorA, y0 + door.h, door.w + 0.42, 0.2, 0, 0.15, TIMBER);
-    // a stone step, or a flight down to the ground when the house stands high on a slope
-    const drop = y0 + P.steps, n = P.steps > 0.25 ? Math.ceil(drop / 0.2) : 1, rise = drop / n, sw = door.w + 0.7;
+    if (lod === 0) for (const yy of [y0 + 0.35, y0 + door.h - 0.45]) slat(doorFace, doorA - 0.1, yy, door.w * 0.72, 0.06, -dDp, 0.02, IRON, 0);
+    const drop = y0 + P.steps, n = P.steps > 0.25 ? Math.ceil(drop / 0.2) : 1, rise = drop / n, sw = door.w + 0.45;
     for (let k = 0; k < n; k++) {
-      const top = n === 1 ? y0 + 0.01 : y0 + 0.01 - k * rise, bot = n === 1 ? y0 - 0.3 : -P.steps - 0.4, st = onWall(doorFace, doorA, (top + bot) / 2, 0.42 + k * 0.34);
-      box(mb, st.x, st.y, st.z, dAl.x ? sw : 0.36 + (k ? 0 : 0.4), top - bot, dAl.x ? 0.36 + (k ? 0 : 0.4) : sw, STONE.clone().multiplyScalar(0.86 + (k % 2) * 0.06), 10);
+      const dd = k ? 0.34 : 0.5, top = n === 1 ? y0 + 0.01 : y0 + 0.01 - k * rise, bot = n === 1 ? y0 - 0.3 : -P.steps - 0.4, st = onWall(doorFace, doorA, (top + bot) / 2, k ? 0.33 + k * 0.34 : 0.25);
+      bevelBox(mb, st, V3(1, 0, 0), V3(0, 1, 0), V3(0, 0, 1), dAl.x ? sw : dd, top - bot, dAl.x ? dd : sw, 0.035, STONE.clone().multiplyScalar(0.8 + (k % 2) * 0.07), 13);
     }
-    // lamp on a bracket beside the door (lights up after dusk)
-    const ls = doorA - door.w / 2 - 0.45, lp = onWall(doorFace, ls, y0 + 2.0, 0.3);
-    beam(mb, onWall(doorFace, ls, y0 + 2.18, 0), onWall(doorFace, ls, y0 + 2.18, 0.36), 0.05, IRON, 0);
-    box(mb, lp.x, lp.y, lp.z, 0.17, 0.24, 0.17, GLOW, 11);
-    box(mb, lp.x, lp.y + 0.15, lp.z, 0.22, 0.06, 0.22, IRON, 0); box(mb, lp.x, lp.y - 0.14, lp.z, 0.2, 0.04, 0.2, IRON, 0);
+    // lamp hung from an iron arm beside the door: glass in a frame of corner posts under a little hipped cap
+    const ls = doorA - door.w / 2 - 0.45, lp = onWall(doorFace, ls, y0 + 1.95, 0.34), lw = 0.2;
+    beam(mb, onWall(doorFace, ls, y0 + 2.3, 0), onWall(doorFace, ls, y0 + 2.3, 0.38), 0.045, IRON, 0);
+    beam(mb, onWall(doorFace, ls, y0 + 1.98, 0), onWall(doorFace, ls, y0 + 2.28, 0.3), 0.03, IRON, 0);
+    box(mb, lp.x, lp.y + 0.22, lp.z, 0.02, 0.1, 0.02, IRON, 0);
+    box(mb, lp.x, lp.y, lp.z, lw - 0.02, 0.24, lw - 0.02, GLOW, 11);
+    for (const [px, pz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) box(mb, lp.x + px * lw / 2, lp.y, lp.z + pz * lw / 2, 0.025, 0.26, 0.025, IRON, 0);
+    box(mb, lp.x, lp.y - 0.14, lp.z, lw + 0.04, 0.04, lw + 0.04, IRON, 0);
+    pyramid(mb, lp.x, lp.y + 0.12, lp.z, lw / 2 + 0.05, 0.12, IRON, 0);
     ud.lights.push([lp.x + dO.x * 0.2, lp.y, lp.z + dO.z * 0.2, 7]);
   }
   if (lod === 0 && !hut) {
@@ -261,29 +361,33 @@ export function makeHouse(seed, lod = 0, params = {}) {
   }
   ud.door = (() => { const p = onWall(doorFace, doorA, 0, 1.3); return [p.x, p.z]; })();
 
-  // windows: dark glass (lit at night) in a frame with a cross mullion, shutters, flower boxes under some
+  // windows: set back in their reveals — dark glass (lit at night) in a slim frame with a cross mullion, a timber
+  // sill out past the wall, plank shutters folded back flat against it, flower boxes under some ground-floor ones
   for (const o of openings) {
-    panel(o.f, o.a, o.y, o.ww, o.wh, 0.02, GLOW, 6);
+    const deep = !o.small && lod < 2, dp = deep ? 0.24 : -0.02;
+    panel(o.f, o.a, o.y, o.ww, o.wh, -dp, GLOW, 6);
     if (lod === 2) continue;
     const fr = TIMBER;
-    slat(o.f, o.a, o.y - 0.1, o.ww + 0.3, 0.1, 0, 0.14, TIMBER_L);              // sill
-    slat(o.f, o.a, o.y + o.wh, o.ww + 0.26, 0.14, 0, 0.11, fr);                  // lintel
-    for (const s of [-1, 1]) slat(o.f, o.a + s * (o.ww / 2 + 0.05), o.y, 0.1, o.wh, 0, 0.09, fr);
-    if (lod > 0) continue;
-    slat(o.f, o.a, o.y, 0.05, o.wh, 0.02, 0.04, fr); slat(o.f, o.a, o.y + o.wh * 0.52, o.ww, 0.05, 0.02, 0.04, fr);
-    if (!o.small && !hut) for (const s of [-1, 1]) panel(o.f, o.a + s * (o.ww / 2 + 0.36), o.y - 0.03, 0.52, o.wh + 0.06, 0.07, shut, 7, true);
-    if (!o.small && o.y < y0 + 1.2 && R() < 0.55) {
-      const b = onWall(o.f, o.a, o.y - 0.3, 0.2), ax = alongV(o.f), on = outN(o.f);
-      box(mb, b.x, b.y, b.z, ax.x ? o.ww + 0.24 : 0.3, 0.22, ax.x ? 0.3 : o.ww + 0.24, TIMBER_L, 7);
-      const bloom = BLOOM[Math.floor(R() * BLOOM.length)];
-      for (let k = 0; k < 5; k++) {
-        const q = b.clone().addScaledVector(ax, (k / 4 - 0.5) * (o.ww + 0.06)).add(V3(0, 0.17, 0)).addScaledVector(on, 0.02 + R() * 0.04);
-        addBlob(mb, q, 0.15, 1, { color: () => C('#4f8030').multiplyScalar(0.8 + R() * 0.35), sway: () => 0, lump: 0.4, seed: k * 7 + o.a, nblend: 0.5, squash: 0.9 });
-        for (let j = 0; j < 5; j++) {
-          const bc = bloom.clone().multiplyScalar(0.85 + R() * 0.3), d = V3((R() - 0.5) * 0.26, 0.06 + R() * 0.1, 0).addScaledVector(on, 0.02 + R() * 0.12);
-          addBlob(mb, q.clone().add(d), 0.045 + R() * 0.02, 0, { color: () => bc, sway: () => 0, lump: 0.25, seed: j * 3 + k });
-        }
-      }
+    if (!deep) {   // gable windows sit on the wall in a plain frame
+      slat(o.f, o.a, o.y - 0.08, o.ww + 0.2, 0.08, 0, 0.1, TIMBER_L); slat(o.f, o.a, o.y + o.wh, o.ww + 0.2, 0.1, 0, 0.08, fr);
+      for (const s of [-1, 1]) slat(o.f, o.a + s * (o.ww / 2 + 0.04), o.y, 0.08, o.wh, 0, 0.07, fr);
+      continue;
+    }
+    const fb = -dp + 0.005;
+    for (const s of [-1, 1]) slat(o.f, o.a + s * (o.ww / 2 - 0.03), o.y, 0.06, o.wh, fb, 0.05, fr);
+    slat(o.f, o.a, o.y + o.wh - 0.06, o.ww, 0.06, fb, 0.05, fr); slat(o.f, o.a, o.y, o.ww, 0.06, fb, 0.05, fr);
+    if (lod === 0) { slat(o.f, o.a, o.y, 0.04, o.wh, fb, 0.035, fr); slat(o.f, o.a, o.y + o.wh * 0.55, o.ww, 0.04, fb, 0.035, fr); }
+    slat(o.f, o.a, o.y - 0.085, o.ww + 0.18, 0.08, -0.04, 0.16, TIMBER_L);
+    if (!hut) for (const s of [-1, 1]) {
+      const sw = o.ww / 2 + 0.05, sa = o.a + s * (o.ww / 2 + 0.03 + sw / 2);
+      slat(o.f, sa, o.y - 0.02, sw, o.wh + 0.04, 0, 0.035, shut.clone().multiplyScalar(0.8));
+      panel(o.f, sa, o.y - 0.02, sw - 0.01, o.wh + 0.04, 0.036, shut, 7, true);
+      if (lod === 0) for (const yy of [o.y + 0.1, o.y + o.wh - 0.14]) slat(o.f, sa, yy, sw - 0.06, 0.05, 0.036, 0.015, shut.clone().multiplyScalar(0.72));
+    }
+    if (lod === 0 && !o.small && o.y < y0 + 1.2 && R() < 0.55) {
+      const b = onWall(o.f, o.a, o.y - 0.33, 0.2), ax = alongV(o.f), bw = o.ww + 0.22;
+      box(mb, b.x, b.y, b.z, ax.x ? bw : 0.26, 0.2, ax.x ? 0.26 : bw, TIMBER_L, 7);
+      planter(mb, b.clone().setY(b.y + 0.09), ax, outN(o.f), bw, BLOOM[Math.floor(R() * BLOOM.length)], R);
     }
   }
 
@@ -305,7 +409,18 @@ export function makeHouse(seed, lod = 0, params = {}) {
   for (const s of [1, -1]) {
     const n = V3(0, cp, s * sp), down = V3(0, -sp, s * cp), ez = s * (hz + ov);
     const Ru = x => V3(x, ridgeU, 0), Eu = x => V3(x, eaveU, ez), o1 = n.clone().multiplyScalar(td), o2 = n.clone().multiplyScalar(td + tt);
-    quad(mb, Ru(xa).add(o2), Ru(xb).add(o2), Eu(xb).add(o2), Eu(xa).add(o2), rc, rCard, n);
+    if (roof === 'tile' && lod < 2) {
+      // tile courses as geometry, in step with the texture's rows (9 per 2m): each course's lower edge stands a
+      // tile's thickness proud of the deck, so the courses catch the light and step along the rakes and eaves
+      const top = Ru(0).add(o2), dn = Eu(0).add(o2).sub(top), sl = dn.length(), pc = 2 / 9, lip = 0.045, nC = Math.ceil(sl / pc - 0.05);
+      dn.divideScalar(sl);
+      const at = (x, t, up) => V3(x, top.y, top.z).addScaledVector(dn, t).addScaledVector(n, up);
+      for (let k = 0; k < nC; k++) {
+        const t0 = k * pc, t1 = Math.min(sl, (k + 1) * pc), up = k === nC - 1 ? 0 : lip;
+        quad(mb, at(xa, t0, 0), at(xb, t0, 0), at(xb, t1, up), at(xa, t1, up), rc, rCard, n, [xa, t0]);
+        if (up) quad(mb, at(xa, t1, up), at(xb, t1, up), at(xb, t1, 0), at(xa, t1, 0), rc.clone().multiplyScalar(0.72), rCard, dn, [xa, t1 - 0.03]);
+      }
+    } else quad(mb, Ru(xa).add(o2), Ru(xb).add(o2), Eu(xb).add(o2), Eu(xa).add(o2), rc, rCard, n);
     if (lod === 2) continue;
     quad(mb, Eu(xa).add(o1), Eu(xb).add(o1), Eu(xb).add(o2), Eu(xa).add(o2), rc.clone().multiplyScalar(0.7), rCard, down);       // tile edge
     for (const x of [xa, xb]) quad(mb, Ru(x).add(o1), Eu(x).add(o1), Eu(x).add(o2), Ru(x).add(o2), rc.clone().multiplyScalar(0.7), rCard, V3(Math.sign(x), 0, 0));
@@ -323,7 +438,7 @@ export function makeHouse(seed, lod = 0, params = {}) {
   }
   if (!thatch && lod < 2) for (const sx of [1, -1]) for (const zp of [0, hz * 0.5, -hz * 0.5]) {   // purlin ends through the gables
     const y = ridgeU - Math.abs(zp) * tp - 0.13;
-    if (chim && Math.sign(chim.x) === sx && Math.abs(zp - chim.z) < 0.75) continue;
+    if (chim && Math.sign(chim.x) === sx && Math.abs(zp - chim.z) < 1.2) continue;
     beam(mb, V3(sx * (hx - 0.1), y, zp), V3(sx * (hx + og + 0.14), y, zp), 0.2, TIMBER);
   }
   if (thatch) box(mb, 0, ridgeTop - 0.08, 0, xb - xa + 0.1, 0.32, 0.55, THATCH_C.clone().multiplyScalar(0.82), 4);
@@ -338,14 +453,13 @@ export function makeHouse(seed, lod = 0, params = {}) {
 
   // ── chimney: tall and tapering against a gable, propped with poles; or a stone stack through the roof ──
   if (chim) {
-    const H = ridgeTop + 1.5 + R() * 1.1, prof = [], segs = lod ? 8 : 16;
-    // a broad foot that sweeps in over the eave height into a straight stack (concave profile)
-    // bottle profile: broad up to about the eaves, then a long sweep into a thick stack
-    const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-    for (let k = 0; k <= 12; k++) { const t = k / 12, y = yB + t * (H - yB); prof.push([0.52 + 0.48 * (1 - sm(yW * 0.55, ridgeTop + 0.6, y)), y]); }
-    lathe(mb, chim.x, chim.z, prof, segs, wash.clone().multiplyScalar(1.03), 8, { sq: 3.2, sx: 0.78, sz: 0.98, rot: Math.PI / segs, shade: j => (j === 0 ? 0.85 : 1) });
-    const hw = 0.52 * 0.98 + 0.05;
-    box(mb, chim.x, H + 0.2, chim.z, hw * 2, 0.42, hw * 2, wash.clone().multiplyScalar(0.98), 8);
+    // Hateno's chimneys are massive: built into the gable, nearly as wide as it at the foot, tapering steadily like
+    // a tall truncated pyramid into a stack well above the ridge. Squared-off section.
+    const H = ridgeTop + 2.2 + R() * 1.4, prof = [], segs = lod ? 8 : 16, rb = 1.3, rt = 0.55;
+    for (let k = 0; k <= 12; k++) { const t = k / 12, y = yB + t * (H - yB); prof.push([rt + (rb - rt) * Math.pow(Math.max(0, 1 - Math.max(0, y) / H), 0.9), y]); }
+    lathe(mb, chim.x, chim.z, prof, segs, wash.clone().multiplyScalar(1.0), 8, { sq: 7, sx: 0.75, sz: 1.0, rot: Math.PI / segs, v0: yB - vf, shade: j => (j === 0 ? 0.85 : j < 3 ? 0.92 : 1) });
+    const hw = rt + 0.05;
+    box(mb, chim.x, H + 0.2, chim.z, hw * 2, 0.42, hw * 2, wash.clone().multiplyScalar(0.98), 8, 0, null, 0, H);
     if (lod < 2) {
       for (const [vx, vz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {   // dark vents in the head
         const c = V3(chim.x + vx * (hw + 0.005), H + 0.12, chim.z + vz * (hw + 0.005)), t = V3(-vz * 0.13, 0, vx * 0.13);
@@ -353,24 +467,16 @@ export function makeHouse(seed, lod = 0, params = {}) {
       }
       box(mb, chim.x, H + 0.44, chim.z, hw * 2 + 0.24, 0.06, hw * 2 + 0.24, TIMBER, 7);
     }
-    // little pyramid roof of tiles
-    const py = H + 0.47, ph = 0.4, pr = hw + 0.16, apex = V3(chim.x, py + ph, chim.z);
-    for (const [ax, az] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) {
-      const a = V3(chim.x + (ax - az) * pr, py, chim.z + (az + ax) * pr), b = V3(chim.x + (ax + az) * pr, py, chim.z + (az - ax) * pr);
-      const n = b.clone().sub(a).cross(apex.clone().sub(a)).normalize(), out = V3(ax, 0.6, az);
-      if (n.dot(out) < 0) n.negate();
-      const ia = mb.v(a.x, a.y, a.z, n.x, n.y, n.z, rc, 0, 0, 0.6, rCard), ib = mb.v(b.x, b.y, b.z, n.x, n.y, n.z, rc, 0, 2 * pr, 0.6, rCard), ic = mb.v(apex.x, apex.y, apex.z, n.x, n.y, n.z, rc, 0, pr, 0, rCard);
-      if (b.clone().sub(a).cross(apex.clone().sub(a)).dot(out) > 0) mb.tri(ia, ib, ic); else mb.tri(ia, ic, ib);
-    }
+    pyramid(mb, chim.x, H + 0.47, chim.z, hw + 0.16, 0.4, rc, rCard);   // little hipped roof of tiles
     ud.smoke.push([chim.x, H + 0.45, chim.z]);
     const sx = Math.sign(chim.x);
     if (lod < 2) beam(mb, V3(chim.x + sx * 0.12, H - 1.0, chim.z), V3(chim.x + sx * 1.5, yB + 0.9, chim.z + Math.sign(chim.z) * 2.3), 0.11, TIMBER);
     if (lod === 0) beam(mb, V3(chim.x - sx * 0.1, H - 0.5, chim.z), V3(sx * (hx - 2.0), ridgeTop + 0.02, 0), 0.1, TIMBER);
-    ud.colliders.push([chim.x, chim.z, 0.85]);
+    ud.colliders.push([chim.x, chim.z, 1.1]);
   } else if (P.chimney) {
     const cx = sc * (hx - 0.9), cz = (R() < 0.5 ? -1 : 1) * Math.min(hz * 0.4, 0.9), top = ridgeTop + 0.9;
     box(mb, cx, (y0 + top) / 2, cz, 0.78, top - y0, 0.78, STONE, 2);
-    if (lod < 2) box(mb, cx, top + 0.08, cz, 0.96, 0.16, 0.96, STONE.clone().multiplyScalar(0.8), 3);
+    if (lod < 2) box(mb, cx, top + 0.08, cz, 0.96, 0.16, 0.96, STONE.clone().multiplyScalar(0.9), 13);
     ud.smoke.push([cx, top + 0.3, cz]);
   }
 
@@ -378,7 +484,7 @@ export function makeHouse(seed, lod = 0, params = {}) {
   if (tower) {
     const yT = yW + 1.0 + (floors === 1 ? 0.5 : 0), segs = lod ? 12 : 20, { x: tx, z: tz } = tower;
     lathe(mb, tx, tz, [[rT + 0.1, yB], [rT + 0.1, y0 + 0.15]], segs, STONE.clone().multiplyScalar(0.92), 10);
-    lathe(mb, tx, tz, [[rT, y0 + 0.1], [rT, y0 + 0.7], [rT, yT - 0.8], [rT, yT]], segs, wash, 8, { shade: j => [0.85, 0.98, 0.98, 0.78][j] });
+    lathe(mb, tx, tz, [[rT, y0 + 0.1], [rT, y0 + 0.7], [rT, yT - 0.8], [rT, yT]], segs, wash, 8, { v0: y0 + 0.1 - vf, shade: j => [0.85, 0.98, 0.98, 0.78][j] });
     const re = rT + 0.45;
     if (lod < 2) lathe(mb, tx, tz, [[rT, yT], [re, yT - 0.14]], segs, TIMBER.clone().multiplyScalar(0.62), 7);
     lathe(mb, tx, tz, [[re, yT - 0.14], [re + 0.02, yT - 0.02], [0.02, yT - 0.02 + re * 1.05]], segs, rc, rCard, { flipV: true });
