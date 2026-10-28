@@ -73,7 +73,7 @@ test('house parameters: pinned choices survive a different seed, so plan and mod
 });
 
 test('windows are set back in holes cut through the wall near by, and sit flush on the far model', () => {
-  const P = { style: 'hateno', front: 'eave', tower: false, chimney: false, width: 8, depth: 6, wings: [], dormers: 0 };
+  const P = { style: 'hateno', front: 'eave', tower: false, chimney: false, width: 8, depth: 6, wings: [], dormers: 0, warp: false };   // as built, before the hand-made warp
   const glassDepth = lod => {
     const g = makeHouse(7, lod, P), p = g.attributes.position.array, k = g.attributes.aCard.array;
     let inset = 0, n = 0;

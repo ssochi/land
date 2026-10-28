@@ -25,9 +25,9 @@ const AT = `const vec2 AT_SIZE = vec2(${ATLAS.w}.0, ${ATLAS.h}.0); const float A
 const propMat = (o) => mat(`
 attribute vec3 aColor; attribute float aSway; attribute vec2 aUV; attribute float aCard; attribute float aFade;
 uniform float uSwayAmp; uniform float uSwayFreq;
-varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH; varying float vFade;
+varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH; varying float vFade; varying float vSw;
 void main(){
-  vUV = aUV; vCard = aCard; vFade = aFade;
+  vUV = aUV; vCard = aCard; vFade = aFade; vSw = aSway;
   mat4 m = modelMatrix * instanceMatrix;
   vec3 pos = position, nrm = normal;
   if (aCard > 19.5) {
@@ -75,7 +75,7 @@ vec3 perturb(vec3 N, vec3 p, vec2 uv, vec3 tn) {
   float im = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-12));
   return normalize(mat3(T * im, B * im, N) * tn);
 }
-varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH; varying float vFade;
+varying vec3 vC; varying vec3 vWP; varying vec3 vSP; varying vec3 vN; varying vec2 vUV; varying float vCard; varying float vH; varying float vFade; varying float vSw;
 void main(){
   if (lodClip(vFade, gl_FragCoord.xy)) discard;
   vec3 alb = vC; float alpha = 1.0;
@@ -119,12 +119,53 @@ void main(){
         float patchN = vnoise(wq * vec2(0.9, 1.3) + 11.0) + 0.15 * vnoise(wq * 4.0 + 2.0) + (ra.a - 0.45) * 0.12;
         float bare = max(1.0 - smoothstep(-aw, aw, d), smoothstep(0.85, 0.87, patchN) * (1.0 - smoothstep(0.9, 2.1, hb)));
         ta.rgb *= (0.93 + 0.12 * tone) * mix(0.84, 1.0, smoothstep(0.0, 1.2, hb + (tone - 0.5) * 0.8));
+        // weathering (Hateno's walls are never one clean colour): patches of older, warmer plaster with a darker
+        // rim where the newer coat ends, lighter freshly limed patches, earth splashed up the foot along a ragged
+        // line, and rain streaks running down from the eaves and from under each window sill (aSway: 1 + metres
+        // below that drip edge, 0 unknown). Fine streaks fade out as they shrink under a pixel.
+        float fq = 1.0 - smoothstep(0.04, 0.12, max(fwidth(wq.x), fwidth(wq.y)));
+        float bn = vnoise(wq * 0.32 + 17.0) * 0.6 + vnoise(wq * 0.95 + 4.0) * 0.28 + vnoise(wq * 3.2) * 0.12 * fq;
+        float blot = smoothstep(0.555, 0.585, bn), rimB = smoothstep(0.53, 0.555, bn) - blot;
+        ta.rgb *= mix(vec3(1.0), vec3(0.92, 0.87, 0.78), blot) * (1.0 - 0.07 * rimB) * (1.0 + 0.05 * smoothstep(0.66, 0.72, 1.0 - bn));
+        float gh = 0.3 + 0.55 * vnoise(vec2(wq.x * 0.6, 3.3)) + 0.2 * vnoise(wq * vec2(2.5, 1.0));
+        ta.rgb *= mix(vec3(1.0), vec3(0.8, 0.75, 0.64), (1.0 - smoothstep(gh - 0.4, gh + 0.05, hb)) * 0.85);
+        float dd = vSw > 0.5 ? vSw - 1.0 : 2.5;
+        float stN = vnoise(vec2(wq.x * 3.3, wq.y * 0.35) + 1.3) * 0.65 + vnoise(vec2(wq.x * 10.0, wq.y * 0.8) + 6.1) * 0.35 * fq;
+        float streak = smoothstep(0.38, 0.78, stN) * exp(-dd * 0.85) * (0.55 + 0.45 * fq);
+        ta.rgb *= mix(vec3(1.0), vec3(0.74, 0.73, 0.68), streak);
         ta.rgb *= 1.0 + 0.07 * (1.0 - smoothstep(0.0, 0.03 + aw, d)) * step(0.0, d);       // the plaster's lit edge
         if (bare > 0.001) {
           ra.rgb *= vec3(0.78, 0.73, 0.64) / max(vC, vec3(0.05)) * (1.0 - 0.4 * smoothstep(-0.06, 0.0, d) * step(d, 0.0));
           ta = mix(ta, ra, bare); tn = mix(tn, rn, bare);
         }
       }
+    }
+    if (vCard > 8.5 && vCard < 9.5) {
+      // clay tiles: the texture repeats every 2m, so each tile also gets its own shade here (the same tile lattice as
+      // texgen's TILE: 6 courses × 5 tiles, rows offset by the same hash) — the odd bright replacement and dark old
+      // one — while the tiles resolve; over the roof, sun-bleached and darker patches, and moss low on the slope
+      vec2 tu = vUV * 0.5; float rr = floor(tu.y * 6.0);
+      float xx = tu.x * 5.0 + mod(rr, 2.0) * 0.5 + floor(hash12(vec2(mod(rr, 6.0), 7.0)) * 3.0) / 6.0;
+      vec2 cid = vec2(floor(xx), rr); float t1 = hash12(cid + 41.3), t2 = hash12(cid + 13.7);
+      float tf = 1.0 - smoothstep(0.2, 0.5, max(fwidth(xx), fwidth(tu.y * 6.0)));
+      vec3 tint = vec3(1.0 + (t1 - 0.5) * 0.24 * tf);
+      tint *= mix(vec3(1.0), vec3(1.14, 1.0, 0.84), step(0.95, t2) * tf);
+      tint *= mix(vec3(1.0), vec3(0.7, 0.66, 0.64), step(0.93, t1) * tf * 0.8);
+      vec2 wp = vSP.xz;
+      tint *= mix(vec3(0.86, 0.85, 0.86), vec3(1.07, 1.03, 0.97), vnoise(wp * 0.22 + 2.0) * 0.7 + vnoise(wp * 0.8) * 0.3);
+      // moss in clumps, lower on the slope, sitting in the shade under each tile's lip
+      float moss = smoothstep(0.64, 0.78, vnoise(wp * 0.9 + 9.1) * 0.6 + vnoise(wp * 3.1 + 3.3) * 0.4 + 0.2 * smoothstep(1.0, 4.0, vUV.y) - 0.08);
+      moss *= 0.35 + 0.65 * smoothstep(0.75, 0.35, tn.w);
+      ta.rgb = mix(ta.rgb * tint, vec3(0.42, 0.46, 0.25) * (0.8 + 0.4 * tn.w), moss * 0.5);
+    } else if (vCard > 6.5 && vCard < 7.5) {
+      // timber greys in patches where it weathers
+      float l = dot(ta.rgb, vec3(0.3, 0.59, 0.11));
+      ta.rgb = mix(ta.rgb, vec3(l) * vec3(1.04, 0.99, 0.92), 0.35 * smoothstep(0.45, 0.8, vnoise(vSP.xz * 0.9 + vSP.y * 0.6 + 5.0)));
+    } else if ((vCard > 9.5 && vCard < 10.5) || vCard > 12.5) {
+      // stonework: damp and mossy at the foot, along a ragged line
+      float mh = 0.35 + 0.55 * vnoise(vSP.xz * 0.9 + vSP.y * 0.3);
+      float mo = (1.0 - smoothstep(mh - 0.35, mh, vH)) * smoothstep(0.35, 0.65, vnoise(vSP.xz * 1.7 + vSP.y * 1.7 + 2.0));
+      ta.rgb = mix(ta.rgb * (1.0 - 0.15 * (1.0 - smoothstep(0.0, mh, vH))), vec3(0.34, 0.4, 0.2), mo * 0.5);
     }
     // toon: flatter relief and shallower cavities — the painted look carries the material, not fine shading
     N = perturb(N, vSP, uv, (tn.xyz * 2.0 - 1.0) * vec3(1.0 - 0.4 * uToon, 1.0 - 0.4 * uToon, 1.0));
