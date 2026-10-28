@@ -8,7 +8,7 @@ core      随机数、噪声、堆。纯函数，没有状态。
 world     DETAIL / FAR 两层高度网格，派生标量场（WATER、WDIST、FLOW、OCC、COVER、FOREST、PATH、TILL、LAWN），
           折线工具（polyline.js），以及 terrainVer 等构建版本号。heightAt / normalAt / moistureAt 等查询都在这里。
   ↓
-terrain   塑形操作（noise、mountains、peak、hill、flatten、plateau、terrace、smooth、apply）、侵蚀（erode、thermal）、土路（path.js）、
+terrain   塑形操作（noise、mountains、peak、hill、flatten、plateau、terrace、ledges、smooth、apply）、侵蚀（erode、thermal）、土路（path.js）、
           崖面位移（crag.js：网格和 groundAt 共用，物件 / 草 / 第一人称都踩在实际画出的岩面上）。
 water     河道开挖（river.js）、湖泊泛洪（lake.js），水体场的惰性重算（water.js）。
 objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures / undergrowth / buildings / village-props 生成器）、

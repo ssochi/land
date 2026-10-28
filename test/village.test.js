@@ -45,6 +45,26 @@ test('LOD levels of houses and props are the same model: same bounds at every le
   }
 });
 
+// compound massing and attachments, including a wing given with only some of its fields
+test('compound houses: wings, towers, dormers and attachments build clean geometry, the same box at every level', () => {
+  const bounds = g => { g.computeBoundingBox(); return g.boundingBox; };
+  const sets = [
+    { style: 'hateno', floors: 2, tower: true, towerShape: 'square', dormers: 2, wings: [{ side: 'b', a: 2 }], pergola: true, deck: true, lean: true, sign: true, ivy: true },
+    { style: 'hateno', front: 'gable', roofShape: 'hip', tower: true, towerShape: 'round', wings: [{ side: 'f' }, { side: 'b', floors: 1, w: 3 }], lean: true, deck: true },
+    { style: 'stone', floors: 2, wings: [{ side: 'b', a: -9, w: 40, e: 5 }], pergola: true, ivy: true }
+  ];
+  for (const P of sets) for (const seed of [4, 19]) {
+    const Q = houseParams(seed, P);
+    for (const W of Q.wings) assert.ok(['f', 'b'].includes(W.side) && W.w > 0 && W.e > 0 && [1, 2].includes(W.floors) && Math.abs(W.a) + W.w / 2 <= (Q.front === 'gable' ? Q.depth : Q.width) / 2, `wing ${JSON.stringify(W)}`);
+    const g0 = makeHouse(seed, 0, P), b0 = bounds(g0);
+    for (const lod of [0, 1, 2]) {
+      const g = lod ? makeHouse(seed, lod, P) : g0, b = bounds(g);
+      assert.ok(g.attributes.position.array.every(Number.isFinite) && g.attributes.normal.array.every(Number.isFinite), `${P.style} #${seed} lod ${lod}: finite`);
+      for (const k of ['min', 'max']) assert.ok(b[k].distanceTo(b0[k]) < 0.15, `${P.style} #${seed} lod ${lod}: ${k} ${b[k].toArray().map(v => v.toFixed(2))} vs ${b0[k].toArray().map(v => v.toFixed(2))}`);
+    }
+  }
+});
+
 test('house parameters: pinned choices survive a different seed, so plan and model agree', () => {
   const P = houseParams(42, { style: 'hateno' }), { lot, door, ...keep } = P;
   const Q = houseParams(9001, keep);

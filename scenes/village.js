@@ -46,7 +46,7 @@ defineScene((m) => {
 
   // ── 镜头：从生成结果里取位置 ──
   const road = v.roads[0].points, hs = v.houses, h0 = hs[0], h1 = hs[Math.min(2, hs.length - 1)];
-  m.camera('overview', { label: '村子全景', at: [40, 52], eye: 9, look: [-6, -22], lookEye: 3, fov: 58 });
+  m.camera('overview', { label: '村子全景', at: [30, 28], eye: 24, look: [0, -12], lookEye: 5, fov: 56 });   // over the shelves to the landmarks and the windmill
   m.camera('street', { label: '主街', at: road[1], eye: 1.8, look: road[3], lookEye: 3, fov: 58 });
   m.camera('house', { label: '村屋', at: h0.street, eye: 1.7, look: [h0.x, h0.z], lookEye: 3.2, fov: 62 });
   const near = (h, t) => [h.door[0] + (h.street[0] - h.door[0]) * t, h.door[1] + (h.street[1] - h.door[1]) * t];

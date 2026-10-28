@@ -237,7 +237,11 @@ export function houseParams(seed, p = {}) {
   // wings: an eave-front house grows one at the back (the street side keeps its door); a gable-front house, whose
   // door is in the +x gable, on either side, sometimes both (a T or a cross plan). Clear of the tower's corner and
   // the door gable.
-  let wings = p.wings;
+  // given wings get defaults for what they leave out (on the back, centred, as tall as the house) and are kept on the wall
+  let wings = Array.isArray(p.wings) ? p.wings.map(W => {
+    const w = +Math.min(D * 0.9, Math.max(1.5, +W.w || Math.min(D * 0.78, 3.8))).toFixed(2), lim = Math.max(0, (L - w) / 2 - 0.3);
+    return { side: W.side === 'f' ? 'f' : 'b', a: +Math.max(-lim, Math.min(lim, +W.a || 0)).toFixed(2), w, e: +Math.max(1, +W.e || 3.2).toFixed(2), floors: W.floors === 1 || W.floors === 2 ? W.floors : floors };
+  }) : null;
   if (!wings) {
     wings = [];
     if (!hut && L >= 7 && u[20] < (style === 'hateno' ? 0.55 : 0.4)) {
