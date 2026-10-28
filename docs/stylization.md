@@ -1,6 +1,6 @@
 # 风格化渲染（「3渲2」）与哈特诺村对照
 
-这份笔记记录四件事：一是「3渲2」（用 3D 渲染出 2D 动画质感，原神、旷野之息 / 王国之泪那种画面）的调研和这里的实现，二是村庄对着哈特诺村截图找出的差距和改动，三是第二轮针对房屋体量、台地和布局层次的改动，四是第三轮让房子不再规整干净、有生活痕迹的改动。
+这份笔记记录五件事：一是「3渲2」（用 3D 渲染出 2D 动画质感，原神、旷野之息 / 王国之泪那种画面）的调研和这里的实现，二是村庄对着哈特诺村截图找出的差距和改动，三是第二轮针对房屋体量、台地和布局层次的改动，四是第三轮让房子不再规整干净、有生活痕迹的改动，五是第四轮对着截图取色后的配色、环境光遮蔽和光照调整。
 
 ## 一、调研：「3渲2」由哪些东西构成
 
@@ -82,6 +82,30 @@
 
 还没做的（下一步）：台地边上的挡土墙；外挂楼梯、筒仓、东风屋那种两层木结构；单片松动的瓦（现在只有颜色变化）；更柔的草叶；动画风格的积云。
 
+## 六、第四轮：并排对比之后，差距主要在颜色和光，不在细节
+
+把我们的画面和王国之泪的旅馆、村长家、东风屋截图并排放在一起，在干净的墙面、屋顶、石基、草地上逐块取样（平均 RGB、色相、饱和度），再统计整幅画面：
+
+| | 王国之泪 | 改前 | 改后 |
+|---|---|---|---|
+| 受光灰泥墙 | (228,209,186) 饱和度 0.10–0.19 | (214,194,142) 饱和度 0.34，偏黄 | (230,226,196) 饱和度 0.15 |
+| 受光屋顶 | (210–224,170–193,142–165) 饱和度 0.26–0.32 | (143–197,98–139,75–98) 饱和度 0.48–0.50，深赭红 | (208,173,148) 饱和度 0.29 |
+| 墙脚石头 | (222,220,197) 近白的石灰岩 | (135,122,97) 深褐灰 | 浅石灰岩色 |
+| 整幅平均 RGB | (0.58,0.65,0.56) 偏青 | (0.57,0.56,0.47) 偏黄 | (0.61,0.65,0.56) |
+| 饱和度 p90 | 0.32–0.43 | 0.49 | 0.39 |
+
+结论：王国之泪的房子是浅色、低饱和的（奶白墙、浅桃色大瓦、白色石灰岩），整幅画面偏青、通透；我们的是浓黄墙、深红瓦、褐色石头，整体偏黄、发闷——这比几何细节的差距大得多。其次是没有环境光遮蔽：物体和地面之间没有接触阴影，像贴上去的（Digital Foundry 的分析提到王国之泪有 AO，Switch 2 版更厚）。调研里另一条：远处的东西更淡、更冷、和天空反差更小，近处更浓更暖；草显得真实靠的是光照、树荫斑驳和摆动，而不是细节量。
+
+改动：
+
+- **配色**（`buildings.js`、`texgen.js`、`village-props.js`）：灰泥改成奶白到暖白的石灰水色；陶瓦改成浅橙粉到桃色，瓦片放大到 50cm（贴图每 2m 4 排 × 4 片，近景的瓦层几何同步改成每排 0.5m、瓦唇 8cm），过烧瓦、晒褪色的瓦和地衣都跟着变浅；条石、乱石改成近白的石灰岩；木头改成灰褐，百叶窗改成褪了色的石板蓝灰；院墙和拱门用同样的奶白；做旧的补丁、泥土和雨痕减弱。
+- **环境光遮蔽**（`src/render/post.js`，`m.env({ ao })`，默认 0.75）：半分辨率、只用深度的 SAO——每个像素从深度重建位置和法线（取深度更接近的一侧邻居，轮廓处不糊），在投影到屏幕的 1.4m 圆盘里按黄金角螺旋取 12 个点，按高出切平面多少、距离多远累计遮蔽；再按深度做双边模糊。草只接收不投射（否则整片草地发灰），天空没有；阴影里减弱（不再把已经提亮的暗部压回去）。手机上关闭。
+- **高光压缩**：原来是三个通道各自压，亮度超过 0.7 的颜色会被挤向白色、丢掉色相（受光的墙和屋顶都发白发灰）；改成按最亮的通道压、其余等比例，只有特别亮的才逐渐趋白。卡通模式的黑位再抬一点。
+- **光和空气**：阴影色偏青（王国之泪阴影里的草是青绿色）；示例场景改成接近正午的光（原来的午后暖光让整幅画面发黄）、偏青白的雾色、更绿的草坪，岩台陡坎边种灌木。
+- 四张野外对照场景（法罗尼、草丘、遗迹、岩壁）复测：暗部 p5 仍在原作 ±0.07 以内，整体反差偏差不超过 0.032。
+
+还没做的（下一步）：台地的陡坎从上面看还是平直的灰带（王国之泪是有体积的白色岩壁，上面长草）；王国之泪村里的大树更大、树冠更浓密；房子周围的地面变化（踩秃的土、石板路、花丛）还不够；挡土墙、外挂楼梯、筒仓。
+
 ## 参考
 
 - 罪恶装备 Xrd：[GDC 2015 讲稿（Arc System Works）](https://www.ggxrd.com/Motomura_Junya_GuiltyGearXrd.pdf)、[GDC Vault](https://gdcvault.com/play/1022031/GuiltyGearXrd-s-Art-Style-The)、[Blender Nation 摘要](https://www.blendernation.com/2015/07/26/junya-c-motomura-behind-the-scenes-of-guilty-gear-xrd/)
@@ -90,4 +114,5 @@
 - 通用：[Roystan toon shader 教程](https://roystan.net/articles/toon-shader/)（两阶光照、高光、rim 公式）、[Unreal 的 Sobel 描边后期](https://docs.unrealengine.com/udk/Three/DevelopmentKitGemsSobelEdgeDetection.html)、[Godot 的深度 + 法线 Sobel 描边](https://godotshaders.com/shader/sobel-outline-shader/)
 - LOD 交叉淡化：[Catlike Coding：LOD 与抖动交叉淡化](https://catlikecoding.com/unity/tutorials/custom-srp/lod-and-reflections/)、[Unity 手册：LOD 过渡](https://docs.unity3d.com/Manual/lod/lod-transitions-mesh-lod.html)
 - 哈特诺村截图：[Zelda Wiki · Hateno Village](https://zeldawiki.wiki/wiki/Hateno_Village)
+- 王国之泪画面分析：[GamingBolt 图形分析](https://gamingbolt.com/the-legend-of-zelda-tears-of-the-kingdom-graphics-analysis-how-big-of-a-leap-is-it)、[Digital Foundry 分析报道（Nintendo Life）](https://www.nintendolife.com/news/2023/05/video-digital-foundrys-technical-analysis-of-zelda-tears-of-the-kingdom)、[Switch 2 版对比（AO 更厚）](https://nintendoeverything.com/zelda-breath-of-the-wild-and-tears-of-the-kingdom-nintendo-switch-2-frame-rate-resolution/)、[空气透视与草地的光影](https://mbh4h.substack.com/p/nintendo-zelda-impressionist-visuals)
 - 做旧与生活痕迹：[Weathering & Grime in 3D Environments](https://environmentart.substack.com/p/weathering-and-grime-in-3d-environments)、[程序化做旧的遮罩规则（凸边磨损、凹处积灰、噪声打散）](https://www.strayspark.studio/blog/procedural-damage-game-assets-complete-workflow)、[80.lv：有生活感的风格化维京场景](https://80.lv/articles/breakdown-building-lived-in-stylized-viking-environment-in-3d)、[歪扭建筑要符合沉降和老化](https://aiartdaily.substack.com/p/777-creating-charming-crooked-architecture-with-ai)、[Rookies：Remote Mountain House（每件道具要让房子更可信、更有个人气息）](https://www.therookies.co/entries/52612)
