@@ -13,7 +13,7 @@ import { terrainChanged } from '../world/state.js';
 import { catmull, nearestOnPath } from '../world/polyline.js';
 import { TERRAIN } from '../terrain/index.js';
 import { carvePath, wearDisc } from '../terrain/path.js';
-import { houseParams } from './buildings.js';
+import { houseParams, houseFootprints } from './buildings.js';
 import { customVariant } from './kinds.js';
 import { placeKind } from './placement.js';
 import { groundAt } from '../terrain/crag.js';
@@ -37,12 +37,20 @@ function rectsOverlap(A, B, m) {
 }
 
 // ground fit for a footprint: height spread across corners and centre
-function siteOK(x, z, w, d, r, maxSpread) {
-  const pts = [...corners(x, z, w, d, r), [x, z]];
+function siteOK(x, z, w, d, r, maxSpread) { return siteSpread([...corners(x, z, w, d, r), [x, z]], maxSpread); }
+function siteSpread(pts, maxSpread) {
   if (pts.some(([px, pz]) => !DETAIL.inside(px, pz) || waterLevelAt(px, pz) != null)) return null;
   const hs = pts.map(([px, pz]) => heightAt(px, pz)), lo = Math.min(...hs), hi = Math.max(...hs);
   return hi - lo <= maxSpread ? hs.reduce((a, b) => a + b, 0) / hs.length : null;
 }
+
+// a house's parts (main body, wings, tower, tall chimney, porch) as world-space corner points, for fitting it to
+// the ground
+const footPoints = (x, z, r, P, m = 0.3) => houseFootprints(P, m).flatMap(([cx, cz, w, d]) => corners(...toWorld(x, z, r, cx, cz), w, d, r));
+// is the model-frame point (lx, lz) on one of the house's parts (grown by m)?
+const onHouse = (P, lx, lz, m) => houseFootprints(P, m).some(([cx, cz, w, d]) => Math.abs(lx - cx) < w / 2 && Math.abs(lz - cz) < d / 2);
+// the rectangle a lot claims (its centre is off the house's when a wing reaches out on one side)
+const lotBox = (x, z, r, P) => { const [cx, cz] = toWorld(x, z, r, P.lotC[0], P.lotC[1]); return { x: cx, z: cz, r, w: P.lot[0], d: P.lot[1] }; };
 
 // fence spans (2.4m) along a polyline; `gates` lists span indices left open. Returns the number of spans.
 export function fenceAlong(points, style = 'wood', gates = []) {
@@ -85,8 +93,8 @@ export function plantField(x, z, w, d, r, crop = 'wheat', seed = 0) {
 
 // a shelf cut into the slope for a house: ground above the floor level is lowered, ground below is left, so on
 // a slope the downhill side stands on a tall stone base
-const cutLot = (x, z, P, h) => TERRAIN.flatten({ x, z, radius: Math.hypot(P.width, P.depth) / 2 + 0.5, height: h, falloff: 2.5, strength: 1, warp: 0, seed: 0, mode: 'cut' });
-const footHeights = (x, z, P, r) => [...corners(x, z, P.width + 0.6, P.depth + 0.6, r), [x, z]].map(([px, pz]) => groundAt(px, pz));
+const cutLot = (x, z, P, h, r) => { const b = lotBox(x, z, r, P); TERRAIN.flatten({ x: b.x, z: b.z, radius: Math.hypot(b.w, b.d) / 2 - 0.2, height: h, falloff: 2.5, strength: 1, warp: 0, seed: 0, mode: 'cut' }); };
+const footHeights = (x, z, P, r) => [...footPoints(x, z, r, P), [x, z]].map(([px, pz]) => groundAt(px, pz));
 // floor level: a little over half way up the slope, but never far above the ground at the door (a long flight
 // of steps up from the street looks wrong; a deeper cut at the back is fine)
 const floorLevel = (x, z, P, r) => {
@@ -100,13 +108,13 @@ export function buildHouse(x, z, r, params, seed, flatten = true, level = null) 
   const P0 = houseParams(seed, params);
   let h = level ? level.h : groundAt(x, z);
   if (!level && flatten) {
-    h = floorLevel(x, z, P0, r); cutLot(x, z, P0, h); terrainChanged();
+    h = floorLevel(x, z, P0, r); cutLot(x, z, P0, h, r); terrainChanged();
   }
   // the base reaches the lowest ground under the footprint; the model is lifted from its centre's ground to
   // the floor level; steps run down to the ground at the door
   const lo = Math.min(...footHeights(x, z, P0, r)), [sx, sz] = toWorld(x, z, r, P0.doorA, P0.depth / 2 + 0.75);
   const P = houseParams(seed, Object.assign({}, params, { base: +Math.max(1.2, h - lo + 0.9).toFixed(2), lift: +(h - groundAt(x, z)).toFixed(2), steps: +Math.max(0, h - groundAt(sx, sz)).toFixed(2) }));
-  const { lot, door, ...keep } = P;   // every random choice is pinned, so the model matches the plan exactly
+  const { lot, lotC, door, ...keep } = P;   // every random choice is pinned, so the model matches the plan exactly
   const v = customVariant('house', keep);
   placeKind('house', x, z, { rotation: r, variant: v });
   const [dx, dz] = toWorld(x, z, r, door[0], door[1] + (P.steps > 0.25 ? Math.ceil((P.steps + 0.55) / 0.2) * 0.34 : 0));
@@ -114,7 +122,7 @@ export function buildHouse(x, z, r, params, seed, flatten = true, level = null) 
     floor: +h.toFixed(2), door: [+dx.toFixed(2), +dz.toFixed(2)] };
 }
 
-const STYLE_MIX = { mixed: [['hateno', 0.64], ['stone', 0.13], ['timber', 0.13], ['hut', 0.1]] };
+const STYLE_MIX = { mixed: [['hateno', 0.76], ['stone', 0.1], ['timber', 0.08], ['hut', 0.06]] };
 const pickStyle = (style, R) => {
   if (!STYLE_MIX[style]) return style;
   let u = R(); for (const [s, w] of STYLE_MIX[style]) { if ((u -= w) <= 0) return s; } return 'hateno';
@@ -173,13 +181,13 @@ export function buildVillage(p, rep) {
     // real reach (a chimney outside a gable, a tower, a porch)
     const set = roads[cd.ri].width / 2 + 2.2 + R() * 2.6 + (P.porch ? 1.6 : 0), x = cd.x + cd.nx * (set + P.depth / 2), z = cd.z + cd.nz * (set + P.depth / 2);
     const r = Math.atan2(-cd.nx, -cd.nz) + (R() - 0.5) * 0.24;   // local +z (the door) faces the road
-    const lot = { x, z, r, w: P.lot[0], d: P.lot[1] };
+    const lot = { x, z, r, box: lotBox(x, z, r, P) }, fp = footPoints(x, z, r, P);
     if (Math.hypot(x - cx, z - cz) > rad * 1.12) continue;
-    if (plaza && Math.hypot(x - cx, z - cz) < plaza.radius + Math.max(P.width, P.depth) / 2 + 1.5) { rejected.space++; continue; }
-    if (lots.some(L => rectsOverlap(L, lot, 1.6)) || R() < p.gaps) { rejected.space++; continue; }
-    if (corners(x, z, P.width + 0.6, P.depth + 0.6, r).some(([px, pz]) => roadDist(px, pz) < 0.5)) { rejected.road++; continue; }
-    if (waterDistAt(x, z) < Math.max(P.width, P.depth) / 2 + 3) { rejected.water++; continue; }
-    if (siteOK(x, z, P.width, P.depth, r, 3.2) == null) { rejected.slope++; continue; }
+    if (plaza && Math.hypot(lot.box.x - cx, lot.box.z - cz) < plaza.radius + Math.max(P.lot[0], P.lot[1]) / 2 + 0.8) { rejected.space++; continue; }
+    if (lots.some(L => rectsOverlap(L.box, lot.box, 1.0)) || R() < p.gaps) { rejected.space++; continue; }
+    if (fp.some(([px, pz]) => roadDist(px, pz) < 0.5)) { rejected.road++; continue; }
+    if (waterDistAt(lot.box.x, lot.box.z) < Math.max(P.lot[0], P.lot[1]) / 2 + 3) { rejected.water++; continue; }
+    if (siteSpread([...fp, [x, z]], 3.2) == null) { rejected.slope++; continue; }
     // no ledge between the door and the street (on terraced ground a lot can sit on the step above the road)
     {
       const [dx, dz] = toWorld(x, z, r, P.doorA, P.depth / 2 + 0.6);
@@ -191,7 +199,7 @@ export function buildVillage(p, rep) {
   }
   // 4. cut every lot's shelf (terrain edits all happen before anything is placed), then build
   for (const L of lots) L.h = floorLevel(L.x, L.z, L.P, L.r);
-  for (const L of lots) cutLot(L.x, L.z, L.P, L.h);
+  for (const L of lots) cutLot(L.x, L.z, L.P, L.h, L.r);
   // a worn footpath from every door out to the street
   for (const L of lots) {
     const [dx, dz] = toWorld(L.x, L.z, L.r, L.P.doorA, L.P.depth / 2 + 0.6), [sx, sz] = L.street;
@@ -200,18 +208,22 @@ export function buildVillage(p, rep) {
   terrainChanged();
   for (const L of lots) houses.push(Object.assign(buildHouse(L.x, L.z, L.r, L.P, L.seed, false, { h: L.h }), { street: L.street }));
 
-  const free = (x, z, m = 0.8) => roadDist(x, z) > m && !lots.some(L => rectsOverlap(L, { x, z, r: 0, w: 0.1, d: 0.1 }, m * 2)) && (!plaza || Math.hypot(x - cx, z - cz) > plaza.radius + 0.5) && waterLevelAt(x, z) == null && DETAIL.inside(x, z);
+  const free = (x, z, m = 0.8) => roadDist(x, z) > m && !lots.some(L => rectsOverlap(L.box, { x, z, r: 0, w: 0.1, d: 0.1 }, m * 2)) && (!plaza || Math.hypot(x - cx, z - cz) > plaza.radius + 0.5) && waterLevelAt(x, z) == null && DETAIL.inside(x, z);
   let props = 0, fences = 0, gardens = 0;
   // 5. back yards: fence on three sides, a vegetable patch or a hay bale and wood pile inside
   for (const L of lots) {
     if (R() > p.fences) continue;
     const hw = L.P.width / 2 + 1.2, back = L.P.depth / 2 + 6, front = L.P.depth / 2 - 0.4;
     const yard = { x: toWorld(L.x, L.z, L.r, 0, -(L.P.depth / 2 + 3))[0], z: toWorld(L.x, L.z, L.r, 0, -(L.P.depth / 2 + 3))[1], r: L.r, w: hw * 2, d: 6 };
-    if (lots.some(o => o !== L && rectsOverlap(o, yard, 0.5)) || corners(yard.x, yard.z, yard.w, yard.d, yard.r).some(([px, pz]) => roadDist(px, pz) < 0.3 || waterLevelAt(px, pz) != null)) continue;
-    const pts = [[-hw, -front], [-hw, -back], [hw, -back], [hw, -front]].map(([a, b]) => toWorld(L.x, L.z, L.r, a, b));
+    if (lots.some(o => o !== L && rectsOverlap(o.box, yard, 0.5)) || corners(yard.x, yard.z, yard.w, yard.d, yard.r).some(([px, pz]) => roadDist(px, pz) < 0.3 || waterLevelAt(px, pz) != null)) continue;
+    const loc = [[-hw, -front], [-hw, -back], [hw, -back], [hw, -front]];
+    // not through a wing or the tower
+    if (loc.slice(1).some(([a, b], i) => { const [a0, b0] = loc[i]; for (let t = 0; t <= 1; t += 0.1) if (onHouse(L.P, a0 + (a - a0) * t, b0 + (b - b0) * t, 0.4)) return true; return false; })) continue;
+    const pts = loc.map(([a, b]) => toWorld(L.x, L.z, L.r, a, b));
     fences += fenceAlong(pts, R() < 0.25 ? 'stone' : 'wood', [Math.floor(R() * 6)]);
-    if (R() < 0.6) { const [gx, gz] = toWorld(L.x, L.z, L.r, (R() - 0.5) * hw * 0.6, -(L.P.depth / 2 + 3.4)); plantField(gx, gz, Math.min(hw * 1.2, 5), 3.2, L.r, 'cabbage', L.seed); gardens++; }
-    else { const [hx, hz] = toWorld(L.x, L.z, L.r, -hw + 1.2, -back + 1.2); placeKind('haybale', hx, hz, { rotation: L.r + R() }); props++; }
+    const gl = (R() - 0.5) * hw * 0.6, gw = Math.min(hw * 1.2, 5);
+    if (R() < 0.6) { if (![-gw / 2, gw / 2].some(dx => onHouse(L.P, gl + dx, -(L.P.depth / 2 + 3.4), 0.6))) { const [gx, gz] = toWorld(L.x, L.z, L.r, gl, -(L.P.depth / 2 + 3.4)); plantField(gx, gz, gw, 3.2, L.r, 'cabbage', L.seed); gardens++; } }
+    else if (!onHouse(L.P, -hw + 1.2, -back + 1.2, 1.0)) { const [hx, hz] = toWorld(L.x, L.z, L.r, -hw + 1.2, -back + 1.2); placeKind('haybale', hx, hz, { rotation: L.r + R() }); props++; }
   }
   // the side walls a chimney or tower stands against (model frame: side ±1 along x, lz along the depth)
   const sideBlocked = (P, side, lz) => P.front === 'gable'
@@ -224,7 +236,7 @@ export function buildVillage(p, rep) {
     for (let k = 0; k < n; k++) {
       let u = R(), kind = 'barrel'; for (const [kk, w] of clutter) { if ((u -= w) <= 0) { kind = kk; break; } }
       const side = R() < 0.5 ? -1 : 1, lx = side * (L.P.width / 2 + 0.9 + R() * 0.6), lz = (R() - 0.3) * L.P.depth * 0.8;
-      if (sideBlocked(L.P, side, lz)) continue;
+      if (sideBlocked(L.P, side, lz) || onHouse(L.P, lx, lz, 0.6)) continue;
       const [px, pz] = toWorld(L.x, L.z, L.r, lx, lz);
       if (roadDist(px, pz) < 0.6 || waterLevelAt(px, pz) != null) continue;
       placeKind(kind, px, pz, { rotation: L.r + (kind === 'woodpile' ? 0 : R() * 6.283) }); props++;
@@ -240,6 +252,7 @@ export function buildVillage(p, rep) {
       let lx, lz;
       if (k < 3) { lx = (R() - 0.5) * L.P.width * 0.9; lz = hd + 0.45 + R() * 0.3; if (Math.abs(lx - L.P.doorA) < 1.4) continue; }
       else { lx = side * (hw + 0.55 + R() * 0.4); lz = (R() - 0.5) * L.P.depth * 0.9; if (sideBlocked(L.P, side, lz)) continue; }
+      if (onHouse(L.P, lx, lz, 0.3)) continue;
       const [px, pz] = toWorld(L.x, L.z, L.r, lx, lz);
       if (roadDist(px, pz) < 0.8 || waterLevelAt(px, pz) != null) continue;
       if (k >= 3 && R() < 0.45) placeKind('bush', px, pz, { rotation: R() * 6.283, scale: 0.4 + R() * 0.3 });
@@ -263,7 +276,7 @@ export function buildVillage(p, rep) {
       acc = 0; side = -side;
       const t = V2(c[i + 1].x - c[i - 1].x, c[i + 1].y - c[i - 1].y).normalize(), o = rd.width / 2 + 0.8;
       const lx = c[i].x - t.y * side * o, lz = c[i].y + t.x * side * o;
-      if (!lots.some(L => rectsOverlap(L, { x: lx, z: lz, r: 0, w: 0.3, d: 0.3 }, 0.6)) && waterLevelAt(lx, lz) == null && (!plaza || Math.hypot(lx - cx, lz - cz) > plaza.radius + 1)) {
+      if (!lots.some(L => rectsOverlap(L.box, { x: lx, z: lz, r: 0, w: 0.3, d: 0.3 }, 0.6)) && waterLevelAt(lx, lz) == null && (!plaza || Math.hypot(lx - cx, lz - cz) > plaza.radius + 1)) {
         placeKind('lantern', lx, lz, { rotation: Math.atan2(t.y * side, -t.x * side) + Math.PI / 2 }); lanterns++;
       }
     }
@@ -273,7 +286,7 @@ export function buildVillage(p, rep) {
   for (let k = 0, tries = 0; k < p.fields && tries < 60; tries++) {
     const a = R() * 6.283, rr = rad * (1.2 + R() * 0.5), fx = cx + Math.cos(a) * rr, fz = cz + Math.sin(a) * rr, w = 16 + R() * 10, d = 11 + R() * 6, r = -a + (R() - 0.5) * 0.3;
     const F = { x: fx, z: fz, r, w: w + 2, d: d + 2 };
-    if (lots.some(L => rectsOverlap(L, F, 3)) || fields.some(G => rectsOverlap(G, F, 3))) continue;
+    if (lots.some(L => rectsOverlap(L.box, F, 3)) || fields.some(G => rectsOverlap(G, F, 3))) continue;
     if (corners(fx, fz, w + 2, d + 2, r).some(([px, pz]) => roadDist(px, pz) < 0.5)) continue;
     if (siteOK(fx, fz, w, d, r, 3.5) == null || waterDistAt(fx, fz) < Math.hypot(w, d) / 2 + 2) continue;
     const crop = R() < 0.75 ? 'wheat' : 'cabbage', plants = plantField(fx, fz, w, d, r, crop, p.seed * 31 + k);

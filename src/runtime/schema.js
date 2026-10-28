@@ -71,7 +71,10 @@ export const SCHEMA = {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], style: [STR, 'hateno', 'hateno（赭黄灰泥墙、陶瓦顶、高烟囱）| stone | timber | hut'], rotation: [NUM, 0, '弧度，0 = 门朝 +z'],
     front: [STR, null, 'eave（长边朝街）| gable（山墙朝街）'], width: [NUM, null, '正面宽，米'], depth: [NUM, null, '进深，米'], floors: [NUM, null, '1 或 2'],
     roof: [STR, null, 'tile | shingle | thatch'], pitch: [NUM, null, '屋面坡度，度'], chimney: [BOOL, null, '烟囱（哈特诺式多为贴着山墙的高烟囱）'],
-    tower: [BOOL, null, '屋后角上的圆塔'], banner: [BOOL, null, '临街墙上挂布幡'], porch: [BOOL, null, '门廊'], tint: [NUM, null, '百叶窗和布幡的配色编号'],
+    tower: [BOOL, null, '塔楼：方塔立在临街一角（王国之泪式，角石 + 四坡尖顶），圆塔在屋后角'], towerShape: [STR, null, 'square | round'],
+    roofShape: [STR, null, 'gable 双坡 | hip 四坡'], wings: [ARR, null, '翼楼 [{ side: "f"|"b", a, w, e, floors }]：主屋前后墙上接出的双坡翼楼（L / T / 十字形平面），a 沿屋脊的偏移、w 宽、e 伸出长度；[] 不要'],
+    dormers: [NUM, null, '前坡上的老虎窗数量'],
+    banner: [BOOL, null, '临街墙上挂布幡'], porch: [BOOL, null, '门廊'], tint: [NUM, null, '百叶窗和布幡的配色编号'],
     flatten: [BOOL, true, '先压平宅基地'], seed: [NUM, 0, ''] } },
   fence:     { phase: 'objects', desc: '沿折线立篱笆（每段 2.4m）：木栅栏或干砌石矮墙。gates 是留空当门的段号。', params: {
     path: [PATH, undefined, '[[x,z],…]'], style: [STR, 'wood', 'wood | stone'], gates: [ARR, [], '留空的段号，如 [0, 5]'] } },
@@ -109,7 +112,7 @@ export const SIGS = {
   grass: 'm.grass({ center, radius, density, height, rules })',
   env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, toon, outline, snowLine, streaks, pollen, rock, grass, water })',
   village: 'm.village({ center, radius, houses, style, gaps, roads, plaza, fields, fences, lanterns, props, trees, windmill, lawn, seed })',
-  building: 'm.building(x, z, { style, rotation, front, width, depth, floors, roof, pitch, chimney, tower, banner, porch, tint, flatten, seed })',
+  building: 'm.building(x, z, { style, rotation, front, width, depth, floors, roof, roofShape, pitch, chimney, tower, towerShape, wings, dormers, banner, porch, tint, flatten, seed })',
   fence: 'm.fence(path, { style, gates })', field: 'm.field({ center, size, rotation, crop, fence, seed })',
   camera: 'm.camera(name, { label, at, eye, look, lookEye, fov } | { label, pos, target, fov })'
 };

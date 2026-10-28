@@ -92,7 +92,7 @@ void main(){
     if (alpha < mix(0.5, 0.02, uA2C)) discard;
     alb *= 0.74 + 0.4 * lt.r;
   }
-  vec3 N = normalize(vN); if (!gl_FrontFacing && !card) N = -N;
+  vec3 N = dot(vN, vN) > 1e-10 ? normalize(vN) : vec3(0.0, 1.0, 0.0); if (!gl_FrontFacing && !card) N = -N;   // a zero normal would light as NaN
   float glow = 0.0;
   if ((vCard > 3.5 && vCard < 11.5) || (vCard > 12.5 && vCard < 13.5)) {
     // building surfaces, uv in metres, textures tile every 2m: 4 thatch · 5 shingle · 6 window · 7 wood · 8 plaster

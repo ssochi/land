@@ -25,14 +25,15 @@ test('house models: every style and front builds clean geometry, and LOD levels 
 });
 
 // a LOD level that changes the model's outline (a different chimney height, a dropped porch, a bigger crate)
-// shows as a jump however well it cross-fades: every level must fill the same box
+// shows as a jump however well it cross-fades: every level must fill the same box (to within the few
+// centimetres the close-up level's single eave tiles hang out)
 test('LOD levels of houses and props are the same model: same bounds at every level', () => {
   const bounds = g => { g.computeBoundingBox(); return g.boundingBox; };
   for (const style of ['hateno', 'stone', 'timber', 'hut']) for (const seed of [3, 11, 27]) {
     const P = { style, tower: style === 'hateno', banner: true, porch: style !== 'hateno' }, b0 = bounds(makeHouse(seed, 0, P));
     for (const lod of [1, 2]) {
       const b = bounds(makeHouse(seed, lod, P));
-      for (const k of ['min', 'max']) assert.ok(b[k].distanceTo(b0[k]) < 0.08, `${style} #${seed} lod ${lod}: ${k} ${b[k].toArray().map(v => v.toFixed(2))} vs ${b0[k].toArray().map(v => v.toFixed(2))}`);
+      for (const k of ['min', 'max']) assert.ok(b[k].distanceTo(b0[k]) < 0.15, `${style} #${seed} lod ${lod}: ${k} ${b[k].toArray().map(v => v.toFixed(2))} vs ${b0[k].toArray().map(v => v.toFixed(2))}`);
     }
   }
   for (const kind of Object.keys(KINDS).filter(k => KINDS[k].mat === 'building' && !k.startsWith('house') && lodLevels(k) > 1)) {
@@ -52,7 +53,7 @@ test('house parameters: pinned choices survive a different seed, so plan and mod
 });
 
 test('windows are set back in holes cut through the wall near by, and sit flush on the far model', () => {
-  const P = { style: 'hateno', front: 'eave', tower: false, chimney: false, width: 8, depth: 6 };
+  const P = { style: 'hateno', front: 'eave', tower: false, chimney: false, width: 8, depth: 6, wings: [], dormers: 0 };
   const glassDepth = lod => {
     const g = makeHouse(7, lod, P), p = g.attributes.position.array, k = g.attributes.aCard.array;
     let inset = 0, n = 0;
