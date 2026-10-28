@@ -39,10 +39,13 @@ defineScene((m) => {
   m.scatter('flower.buttercup', { count: 2600, area: m.ring(0, -8, 20, 140), rules: { slope: [0, 0.45], noise: { scale: 0.045, threshold: 0.55, seed: 6 } }, seed: 19 });
   m.scatter('reed', { count: 90, area: m.circle(-105, 20, 75), rules: { waterDist: [0.3, 3] }, minSpacing: 1.2, seed: 20 });
   m.scatter('rock.boulder', { count: 16, area: m.ring(0, -8, 60, 160), rules: { slope: [0.1, 0.7] }, scale: [0.6, 1.6], minSpacing: 10, seed: 21 });
+  // 岩台陡坎边上的灌木，打破陡坎平直的边（王国之泪的哈特诺村，坎边总长着灌木）
+  m.scatter('bush', { count: 60, area: m.circle(0, -8, 80), rules: { slope: [0.3, 1.4] }, minSpacing: 2.2, seed: 25 });
   m.grass({ center: [0, -8], radius: 175 });
 
-  // ── 环境：下午偏暖的阳光，空气里有点雾气 ──
-  m.env({ time: 0.74, wind: 0.3, fogDensity: 0.0034, haze: '#c2cfc6', hazeFar: 0.5, clouds: 0.5, snowLine: 330, rock: '#d2cfc4' });
+  // ── 环境：接近正午的阳光，空气通透、偏青（对着王国之泪的哈特诺村截图取的色） ──
+  m.env({ time: 0.62, wind: 0.3, fogDensity: 0.0034, haze: '#cfe2e0', hazeFar: 0.5, clouds: 0.5, snowLine: 330, rock: '#d2cfc4',
+    grass: { root: '#47693a', mid: '#6c9750', tipA: '#bccf8c', tipB: '#98bf6e' } });   // TotK's Hateno: cooler, greener lawns
 
   // ── 镜头：从生成结果里取位置 ──
   const road = v.roads[0].points, hs = v.houses, h0 = hs[0], h1 = hs[Math.min(2, hs.length - 1)];

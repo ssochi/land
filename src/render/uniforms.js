@@ -18,7 +18,7 @@ export const U = {
   uHazeFar: { value: 0.45 }, uVFog: { value: new THREE.Vector3(0, 12, 0) }, uCloudCover: { value: 0.5 }, uGlare: { value: 1 },
   uNight: { value: 0 },   // 0 by day → 1 after sunset: lit windows, lanterns, point lights (src/render/time-of-day.js)
   // stylisation (m.env toon / outline, 0–1): banded light over a lifted, hue-shifted shade, and drawn outlines
-  uToon: { value: 0.8 }, uShadeTint: { value: new THREE.Color(0.93, 0.95, 1.1) }, uOutline: { value: 0.6 },
+  uToon: { value: 0.8 }, uShadeTint: { value: new THREE.Color(0.9, 0.97, 1.04) }, uOutline: { value: 0.6 }, uAO: { value: 0.75 },
   // the nearest lantern lights (xyz, radius; radius 0 = unused), lit after dusk (src/render/lights.js)
   uPL: { value: Array.from({ length: 12 }, () => new THREE.Vector4()) }, uPLColor: { value: new THREE.Color(1.0, 0.6, 0.28).multiplyScalar(1.7) }
 };

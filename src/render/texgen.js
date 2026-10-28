@@ -164,7 +164,7 @@ void main(){
 const TILE = /* glsl */`
 void main(){
   vec2 uv = vUv;
-  float rows = 6.0, cols = 5.0, r = floor(uv.y * rows), fy = fract(uv.y * rows);   // big chunky tiles, as on Hateno's roofs
+  float rows = 4.0, cols = 4.0, r = floor(uv.y * rows), fy = fract(uv.y * rows);   // big chunky tiles (50cm), as on TotK's Hateno roofs
   float x = uv.x * cols + mod(r, 2.0) * 0.5 + floor(h12(vec2(mod(r, rows), 7.0)) * 3.0) / 6.0, cx = floor(x), fx = fract(x);
   vec2 cell = vec2(mod(cx, cols), mod(r, rows));
   float id = h12(cell + 3.1), id2 = h12(cell + 9.7), id3 = h12(cell + 5.3);
@@ -175,10 +175,10 @@ void main(){
   float side = 1.0 - smoothstep(0.93, 0.99, abs(sx)), below = smoothstep(lower - 0.015, lower + 0.01, fy);
   float lip = smoothstep(lower - 0.2, lower - 0.04, fy) * (1.0 - below), under = smoothstep(0.0, 0.35, fy);
   float grain = pnoise(uv * 120.0, 120.0), spot = pfbm(uv * 14.0 + id, 14.0);
-  vec3 c = mix(vec3(0.7, 0.36, 0.24), vec3(0.88, 0.53, 0.36), id);                        // terracotta leaning orange
-  c = mix(c, vec3(0.52, 0.25, 0.19), step(0.86, id2) * 0.65);                             // over-fired
-  c = mix(c, vec3(0.9, 0.64, 0.5), step(0.9, id3) * 0.45);                                // sun-bleached
-  c = mix(c, vec3(0.52, 0.54, 0.34), smoothstep(0.64, 0.8, spot) * step(0.55, id2) * 0.5); // lichen
+  vec3 c = mix(vec3(0.84, 0.59, 0.47), vec3(0.93, 0.73, 0.61), id);                        // pale salmon to peach (TotK's sunbaked clay)
+  c = mix(c, vec3(0.7, 0.44, 0.36), step(0.88, id2) * 0.6);                               // over-fired
+  c = mix(c, vec3(0.97, 0.84, 0.72), step(0.88, id3) * 0.5);                              // sun-bleached
+  c = mix(c, vec3(0.7, 0.7, 0.5), smoothstep(0.64, 0.8, spot) * step(0.6, id2) * 0.4);    // lichen
   c *= (0.82 + 0.18 * under) * (1.0 + 0.08 * lip) * (0.93 + 0.12 * grain) * (1.0 + 0.08 * sx * (id3 - 0.5)) * (1.0 - 0.1 * sx * sx);   // each tile slightly curved across
   c = mix(c, c * 0.62, below);
   c = mix(c * vec3(0.45, 0.4, 0.38), c, side);

@@ -126,37 +126,37 @@ void main(){
         float fq = 1.0 - smoothstep(0.04, 0.12, max(fwidth(wq.x), fwidth(wq.y)));
         float bn = vnoise(wq * 0.32 + 17.0) * 0.6 + vnoise(wq * 0.95 + 4.0) * 0.28 + vnoise(wq * 3.2) * 0.12 * fq;
         float blot = smoothstep(0.555, 0.585, bn), rimB = smoothstep(0.53, 0.555, bn) - blot;
-        ta.rgb *= mix(vec3(1.0), vec3(0.92, 0.87, 0.78), blot) * (1.0 - 0.07 * rimB) * (1.0 + 0.05 * smoothstep(0.66, 0.72, 1.0 - bn));
+        ta.rgb *= mix(vec3(1.0), vec3(0.95, 0.92, 0.86), blot) * (1.0 - 0.05 * rimB) * (1.0 + 0.04 * smoothstep(0.66, 0.72, 1.0 - bn));
         float gh = 0.3 + 0.55 * vnoise(vec2(wq.x * 0.6, 3.3)) + 0.2 * vnoise(wq * vec2(2.5, 1.0));
-        ta.rgb *= mix(vec3(1.0), vec3(0.8, 0.75, 0.64), (1.0 - smoothstep(gh - 0.4, gh + 0.05, hb)) * 0.85);
+        ta.rgb *= mix(vec3(1.0), vec3(0.84, 0.82, 0.74), (1.0 - smoothstep(gh - 0.4, gh + 0.05, hb)) * 0.8);
         float dd = vSw > 0.5 ? vSw - 1.0 : 2.5;
         float stN = vnoise(vec2(wq.x * 3.3, wq.y * 0.35) + 1.3) * 0.65 + vnoise(vec2(wq.x * 10.0, wq.y * 0.8) + 6.1) * 0.35 * fq;
         float streak = smoothstep(0.38, 0.78, stN) * exp(-dd * 0.85) * (0.55 + 0.45 * fq);
-        ta.rgb *= mix(vec3(1.0), vec3(0.74, 0.73, 0.68), streak);
+        ta.rgb *= mix(vec3(1.0), vec3(0.82, 0.82, 0.78), streak);
         ta.rgb *= 1.0 + 0.07 * (1.0 - smoothstep(0.0, 0.03 + aw, d)) * step(0.0, d);       // the plaster's lit edge
         if (bare > 0.001) {
-          ra.rgb *= vec3(0.78, 0.73, 0.64) / max(vC, vec3(0.05)) * (1.0 - 0.4 * smoothstep(-0.06, 0.0, d) * step(d, 0.0));
+          ra.rgb *= vec3(0.93, 0.91, 0.85) / max(vC, vec3(0.05)) * (1.0 - 0.4 * smoothstep(-0.06, 0.0, d) * step(d, 0.0));
           ta = mix(ta, ra, bare); tn = mix(tn, rn, bare);
         }
       }
     }
     if (vCard > 8.5 && vCard < 9.5) {
       // clay tiles: the texture repeats every 2m, so each tile also gets its own shade here (the same tile lattice as
-      // texgen's TILE: 6 courses × 5 tiles, rows offset by the same hash) — the odd bright replacement and dark old
+      // texgen's TILE: 4 courses × 4 tiles, rows offset by the same hash) — the odd bright replacement and dark old
       // one — while the tiles resolve; over the roof, sun-bleached and darker patches, and moss low on the slope
-      vec2 tu = vUV * 0.5; float rr = floor(tu.y * 6.0);
-      float xx = tu.x * 5.0 + mod(rr, 2.0) * 0.5 + floor(hash12(vec2(mod(rr, 6.0), 7.0)) * 3.0) / 6.0;
+      vec2 tu = vUV * 0.5; float rr = floor(tu.y * 4.0);
+      float xx = tu.x * 4.0 + mod(rr, 2.0) * 0.5 + floor(hash12(vec2(mod(rr, 4.0), 7.0)) * 3.0) / 6.0;
       vec2 cid = vec2(floor(xx), rr); float t1 = hash12(cid + 41.3), t2 = hash12(cid + 13.7);
-      float tf = 1.0 - smoothstep(0.2, 0.5, max(fwidth(xx), fwidth(tu.y * 6.0)));
-      vec3 tint = vec3(1.0 + (t1 - 0.5) * 0.24 * tf);
-      tint *= mix(vec3(1.0), vec3(1.14, 1.0, 0.84), step(0.95, t2) * tf);
-      tint *= mix(vec3(1.0), vec3(0.7, 0.66, 0.64), step(0.93, t1) * tf * 0.8);
+      float tf = 1.0 - smoothstep(0.2, 0.5, max(fwidth(xx), fwidth(tu.y * 4.0)));
+      vec3 tint = vec3(1.0 + (t1 - 0.5) * 0.2 * tf);
+      tint *= mix(vec3(1.0), vec3(1.06, 0.98, 0.9), step(0.95, t2) * tf);
+      tint *= mix(vec3(1.0), vec3(0.82, 0.8, 0.8), step(0.94, t1) * tf * 0.8);
       vec2 wp = vSP.xz;
       tint *= mix(vec3(0.86, 0.85, 0.86), vec3(1.07, 1.03, 0.97), vnoise(wp * 0.22 + 2.0) * 0.7 + vnoise(wp * 0.8) * 0.3);
       // moss in clumps, lower on the slope, sitting in the shade under each tile's lip
       float moss = smoothstep(0.64, 0.78, vnoise(wp * 0.9 + 9.1) * 0.6 + vnoise(wp * 3.1 + 3.3) * 0.4 + 0.2 * smoothstep(1.0, 4.0, vUV.y) - 0.08);
       moss *= 0.35 + 0.65 * smoothstep(0.75, 0.35, tn.w);
-      ta.rgb = mix(ta.rgb * tint, vec3(0.42, 0.46, 0.25) * (0.8 + 0.4 * tn.w), moss * 0.5);
+      ta.rgb = mix(ta.rgb * tint, vec3(0.6, 0.62, 0.42) * (0.8 + 0.4 * tn.w), moss * 0.4);
     } else if (vCard > 6.5 && vCard < 7.5) {
       // timber greys in patches where it weathers
       float l = dot(ta.rgb, vec3(0.3, 0.59, 0.11));

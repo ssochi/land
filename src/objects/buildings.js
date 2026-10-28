@@ -30,10 +30,12 @@ import { MB, V3, sliceGrid, warp } from './mesh-builder.js';
 import { Poly, bake, emit } from './poly/index.js';
 
 const C = hex => new THREE.Color(hex);
-const STONE = C('#bfae92'), TIMBER = C('#5e4532'), TIMBER_L = C('#86664a'), IRON = C('#33312e'), GLOW = C('#ffd9a0');
+// palette from TotK's Hateno (sampled from screenshots): near-white limestone, grey-brown timber
+const STONE = C('#e0dac8'), TIMBER = C('#5c4a3d'), TIMBER_L = C('#8b7563'), IRON = C('#33312e'), GLOW = C('#ffd9a0');
 const TILE_C = C('#ffffff'), THATCH_C = C('#ffffff'), SHINGLE_T = [C('#c49a7a'), C('#8a95a6'), C('#a57d64')];
-const WASH = { hateno: ['#e6c47e', '#edd49c', '#ecd8b0', '#e4bf8c', '#ddb56c', '#f1e7d0'], stone: ['#c4b49a'], timber: ['#f2ece0'], hut: ['#a8957c'] };
-const SHUTTER = [C('#4e6a58'), C('#53708e'), C('#6c533f'), C('#5d7448'), C('#7d4b43')];
+// lime-washed plaster: cream to warm white, the odd older ochre house (BotW's Hateno)
+const WASH = { hateno: ['#f3e5cf', '#f5ebdb', '#efe0c8', '#f7efe3', '#eedcc0', '#f1e2c9'], stone: ['#d2c8b4'], timber: ['#f4efe4'], hut: ['#b3a38c'] };
+const SHUTTER = [C('#667a8a'), C('#5d7482'), C('#6f6457'), C('#677a68'), C('#7c6a62')];   // weathered slate blues and greys
 const BANNER = [C('#a3456b'), C('#5f7f3f'), C('#3f5f8f'), C('#b0703a')];
 const BLOOM = [C('#ee7a2a'), C('#d8402f'), C('#e8c33a'), C('#e070a0'), C('#f2efe6')];
 const POT = [C('#3f8f8a'), C('#4f7fa0'), C('#a0603f'), C('#b8653f')];
@@ -618,7 +620,7 @@ function buildBlock(ctx, B, bi, R) {
       const ax = dAl.clone(), dn = V3(dO.x * Math.cos(tilt), -Math.sin(tilt), dO.z * Math.cos(tilt)), up = ax.clone().cross(dn).negate();
       const cc = onWall(doorFace, doorA, cy, 0).addScaledVector(dn, cd / 2);
       obox(mb, cc, ax, up, dn, cw, 0.07, cd, TIMBER_L, 7);
-      if (roof === 'tile') obox(mb, cc.clone().addScaledVector(up, 0.07), ax, up, dn, cw + 0.1, 0.07, cd + 0.08, C('#d9845c'), 0);
+      if (roof === 'tile') obox(mb, cc.clone().addScaledVector(up, 0.07), ax, up, dn, cw + 0.1, 0.07, cd + 0.08, C('#e2a486'), 0);
       for (const s of [-1, 1]) beam(mb, onWall(doorFace, doorA + s * (cw / 2 - 0.15), cy - 0.55, 0.02), onWall(doorFace, doorA + s * (cw / 2 - 0.15), cy - 0.2, cd - 0.15), 0.07, TIMBER);
     }
     ud.door = (() => { const p = onWall(doorFace, doorA, 0, 1.3); return [p.x, p.z]; })();
@@ -770,7 +772,7 @@ function roofOf(ctx, B, d) {
   // length; x0 offset of the plane's centre along ax (gable planes are not trimmed)
   const plane = (top, dn, ax, n, half, sl) => {
     if (roof === 'tile' && lod === 0) {
-      const pc = 2 / 6, lip = 0.06, nC = Math.ceil(sl / pc - 0.05);
+      const pc = 2 / 4, lip = 0.08, nC = Math.ceil(sl / pc - 0.05);   // one course per texture row (texgen TILE: 4 per 2m)
       const at = (u, t, up) => top.clone().addScaledVector(ax, u).addScaledVector(dn, t).addScaledVector(n, up);
       for (let k = 0; k < nC; k++) {
         const t0 = k * pc, t1 = Math.min(sl, (k + 1) * pc), up = k === nC - 1 ? 0 : lip, h0 = half(t0), h1 = half(t1);
@@ -797,11 +799,11 @@ function roofOf(ctx, B, d) {
     if (lod !== 0 || thatch) return;
     const R = RT;
     const ax = Bp.clone().sub(A), Ln = ax.length(); ax.divideScalar(Ln);
-    const k = Math.max(1, Math.round(Ln / 0.4)), w = Ln / k, side = out.clone().normalize(), up = n.clone();
+    const k = Math.max(1, Math.round(Ln / 0.5)), w = Ln / k, side = out.clone().normalize(), up = n.clone();
     for (let i = 0; i < k; i++) {
       const hang = 0.02 + R() * 0.06, c = A.clone().addScaledVector(ax, (i + 0.5) * w).addScaledVector(side, hang - 0.14).addScaledVector(up, 0.025 + R() * 0.012);
       const tilt = (R() - 0.5) * 0.12, a1 = ax.clone().applyAxisAngle(up, tilt), a3 = up.clone().cross(a1).normalize();
-      const col = (roof === 'tile' ? C('#c9704c') : rc).clone().multiplyScalar(0.9 + R() * 0.25);
+      const col = (roof === 'tile' ? C('#dc9c7e') : rc).clone().multiplyScalar(0.9 + R() * 0.25);
       withChamfer(false, () => obox(mb, c, a1, up, a3.dot(side) > 0 ? a3 : a3.negate(), w * (0.92 + R() * 0.06), 0.035, 0.32, col, 0));   // too thin to chamfer
     }
   };
@@ -842,7 +844,7 @@ function roofOf(ctx, B, d) {
       // boards up the two hips, capped with ridge tiles
       for (const sz of [1, -1]) {
         const A = V3(sx * rx, ridgeTop - 0.02, 0), Bp = V3(sx * (hx + ov), eaveU + (td + tt) / cp, sz * (hz + ov));
-        beam(mb, A, Bp, 0.16 * trim, roof === 'tile' ? C('#c06a48') : rc.clone().multiplyScalar(0.9), roof === 'tile' ? 0 : rCard, V3(0, 1, 0), 0.12 * trim);
+        beam(mb, A, Bp, 0.16 * trim, roof === 'tile' ? C('#d29274') : rc.clone().multiplyScalar(0.9), roof === 'tile' ? 0 : rCard, V3(0, 1, 0), 0.12 * trim);
       }
     }
   } else {
@@ -987,7 +989,7 @@ const LEAF_D = C('#3f6e2a');
 function attachments(ctx, B, d) {
   const { P, mb, lod, yB } = ctx, { y0, doorFace, door, onWall, outN, alongV, len, ud } = d;
   const RA = mulberry32(ctx.seed * 31 + 211), doorA = P.doorA, roofTile = B.roof === 'tile';
-  const tile = C('#c9704c'), plank = TIMBER_L, dark = TIMBER;
+  const tile = C('#dc9c7e'), plank = TIMBER_L, dark = TIMBER;
   const ground = -P.steps;   // the ground at the door (a flight of steps when the house stands up on its base)
   // ivy leaves along a run of wall or timber: small overlapping leaf quads facing out, darker inside the clump; a
   // farther level keeps every second (or fourth) leaf, larger, so the clump keeps its shape and tone

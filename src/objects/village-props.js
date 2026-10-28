@@ -12,7 +12,7 @@ import { quad, box, beam, withChamfer } from './buildings.js';
 import { Poly, rect2, circle2, fillet2, withDetail } from './poly/index.js';
 
 const C = hex => new THREE.Color(hex);
-const WOOD = C('#a7825e'), WOOD_D = C('#6b4d36'), IRON = C('#3b3a38'), STONE = C('#b2a796'), GLOW = C('#ffd9a0'), PLASTER = C('#ecdcbc');
+const WOOD = C('#a7825e'), WOOD_D = C('#6b4d36'), IRON = C('#3b3a38'), STONE = C('#d8d1c0'), GLOW = C('#ffd9a0'), PLASTER = C('#ecdcbc');
 
 const geo = (mb, ud) => { const g = mb.geo(); g.userData = Object.assign({ colliders: [], lights: [], smoke: [] }, ud); return g; };
 
@@ -227,7 +227,7 @@ function stall(seed) {
 
 // yard wall (the low wall round TotK's chief's house): one 2.4m span of plastered wall with a softly rounded top;
 // its stucco frays here and there at the foot, showing the rubble inside, as on the houses
-const YARD_WASH = ['#efe2c6', '#ecd8b0', '#e9cf9f'];
+const YARD_WASH = ['#f3e6d0', '#f0e2c8', '#f5eadb'];   // the houses' lime-washed cream (buildings.js WASH)
 export const makeYardWall = (seed, lod = 0) => withDetail(lod, () => yardWall(seed));
 function yardWall(seed) {
   const R = mulberry32(seed), mb = new MB(), h = 0.95, t = 0.44, top = h - 0.15;
