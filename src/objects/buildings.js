@@ -1,7 +1,7 @@
 // Village houses, generated from parameters. Modelled on Hateno Village (Breath of the Wild / Tears of the
-// Kingdom): ochre or cream stucco over a rubble-stone base, steep terracotta tile roofs with a ragged eave of
-// single tiles on a dark timber frame (deck edge, bargeboards, exposed rafter tails and purlin ends), a tall
-// tapering chimney propped with poles, small shuttered windows with flower boxes, a plank door under a little
+// Kingdom): cream stucco over a rubble-stone base, steep roofs of chunky clay slabs whose own thick ends make the
+// eaves and verges (no dark boards; rafter tails and purlin ends show under them), a tall tapering chimney propped
+// with poles, small windows with pale sky-lit glass and faded slate shutters, flower boxes, a plank door under a little
 // tiled canopy with a wall lamp, cloth banners. A house is a composition of blocks, not one box: the main body
 // (gable or hipped roof), wings on its front or back wall (an L, T or cross plan, their roofs meeting the main
 // roof in valleys), dormers on the front roof, a tall square tower with quoins and a pyramid roof (TotK) or a
@@ -12,7 +12,7 @@
 //   hut     small weathered plank hut with a thatch roof
 // front: 'eave' puts the long side (and the door) to the street, 'gable' turns a gable end to it.
 // LOD: every level is the same house (same layout, colours and materials; details that only some levels draw
-// use their own random streams). lod 0 is the close-up model (chamfered timber, tile courses as geometry,
+// use their own random streams). lod 0 is the close-up model (chamfered timber, every roof slab as geometry,
 // rafter tails, mullions, flower boxes, door pots); lod 1 drops what is under a pixel or two from its distance
 // (sharp timber, the tile texture on flat roof planes); lod 2 keeps every part that still shows as colour or
 // silhouette — roof edges and boards, porch, banner, quoins, timber frame, shutters — but sets windows and the
@@ -32,10 +32,14 @@ import { Poly, bake, emit } from './poly/index.js';
 const C = hex => new THREE.Color(hex);
 // palette from TotK's Hateno (sampled from screenshots): near-white limestone, grey-brown timber
 const STONE = C('#e0dac8'), TIMBER = C('#5c4a3d'), TIMBER_L = C('#8b7563'), IRON = C('#33312e'), GLOW = C('#ffd9a0');
-const TILE_C = C('#ffffff'), THATCH_C = C('#ffffff'), SHINGLE_T = [C('#c49a7a'), C('#8a95a6'), C('#a57d64')];
+const TILE_C = C('#ffffff'), THATCH_C = C('#ffffff'), SHINGLE_T = [C('#c49a7a'), C('#b48a70'), C('#a57d64')];
 // lime-washed plaster: cream to warm white, the odd older ochre house (BotW's Hateno)
 const WASH = { hateno: ['#f3e5cf', '#f5ebdb', '#efe0c8', '#f7efe3', '#eedcc0', '#f1e2c9'], stone: ['#d2c8b4'], timber: ['#f4efe4'], hut: ['#b3a38c'] };
-const SHUTTER = [C('#667a8a'), C('#5d7482'), C('#6f6457'), C('#677a68'), C('#7c6a62')];   // weathered slate blues and greys
+const SHUTTER = [C('#8c9ea8'), C('#8197a2'), C('#9a9a8e'), C('#8e9c8c'), C('#a49a8f')];   // sun-faded slate blues, grey-greens, greys
+// clay slabs are laid on texgen TILE's lattice: course r is offset by (r mod 2)/2 + SLAB_OFF[r mod 4] slabs
+const SLAB_OFF = [0, 1 / 6, 0, 2 / 6];
+const FRAME = C('#cfc4ae');   // window frames: limed, weathered wood, pale as TotK's (dark frames make every window a hole)
+const QUOIN = C('#d3d1c8');   // dressed limestone at the corners: greyer and cooler than the lime-washed plaster
 const BANNER = [C('#a3456b'), C('#5f7f3f'), C('#3f5f8f'), C('#b0703a')];
 const BLOOM = [C('#ee7a2a'), C('#d8402f'), C('#e8c33a'), C('#e070a0'), C('#f2efe6')];
 const POT = [C('#3f8f8a'), C('#4f7fa0'), C('#a0603f'), C('#b8653f')];
@@ -342,7 +346,7 @@ export function makeHouse(seed, lod = 0, params = {}) { return withChamfer(lod =
 // roof constants shared by the plan and the builder
 const roofDims = (roof, pitch) => {
   const thatch = roof === 'thatch', tp = Math.tan(pitch * Math.PI / 180), cp = Math.cos(pitch * Math.PI / 180);
-  return { thatch, tp, cp, sp: Math.sin(pitch * Math.PI / 180), ov: thatch ? 0.65 : 0.6, og: thatch ? 0.45 : 0.5, td: thatch ? 0 : 0.12, tt: thatch ? 0.36 : 0.13 };
+  return { thatch, tp, cp, sp: Math.sin(pitch * Math.PI / 180), ov: thatch ? 0.65 : 0.6, og: thatch ? 0.45 : 0.5, td: thatch ? 0 : 0.08, tt: thatch ? 0.36 : 0.09 };
 };
 
 // The house as blocks, in the roof frame (main body centred, ridge along x). Each block has its own walls,
@@ -353,7 +357,10 @@ const roofDims = (roof, pitch) => {
 // builder keeps windows, quoins and trim off them.
 function planBlocks(P, seed, y0, fh) {
   const gable = P.front === 'gable', L = gable ? P.depth : P.width, D = gable ? P.width : P.depth, hx = L / 2, hz = D / 2;
-  const R = mulberry32(seed * 31 + 11), rd = roofDims(P.roof, P.pitch), yW = y0 + P.floors * fh;
+  // a single storey gets a knee wall up into the roof space (Hateno's cottages stand taller than their door and
+  // windows by well over a metre; the bare storey height puts the eaves at the door head)
+  const wallTop = f => y0 + f * fh + (f === 1 && P.style !== 'hut' ? 0.5 : 0);
+  const R = mulberry32(seed * 31 + 11), rd = roofDims(P.roof, P.pitch), yW = wallTop(P.floors);
   const ridgeTop = yW + hz * rd.tp + (rd.td + rd.tt) / rd.cp;
   const main = { kind: 'main', cx: 0, cz: 0, th: 0, L, D, yF: y0, yW, floors: P.floors, roof: P.roof, pitch: P.pitch, shape: P.roofShape, sag: 0.03 + R() * 0.05 };
   const blocks = [main], obst = [];
@@ -362,9 +369,10 @@ function planBlocks(P, seed, y0, fh) {
   main.chim = P.chimney === 'tall' ? { x: (gable ? -1 : P.chimSide) * (hx + 0.55), z: (R() < 0.5 ? -1 : 1) * (0.95 + R() * 0.35) } : null;
   if (rT && P.towerShape === 'round') main.round = gable ? { x: -(hx - 0.2 * rT), z: ts * (hz - 0.3 * rT) } : { x: ts * (hx - 0.3 * rT), z: -(hz - 0.2 * rT) };
   if (rT && P.towerShape === 'square') {
-    // tall and slender, two stages clear of the roof, under a steep pyramid of tiles
+    // tall and slender, rising well clear of the roof (TotK's chief's house: the tower stands about twice the
+    // house's height), under a steep pyramid of tiles
     const s = squareTower(rT), [tx, tz] = towerAt(P, hx, hz, s, 0.32);
-    blocks.push({ kind: 'tower', cx: tx, cz: tz, th: 0, L: s, D: s, yF: y0, yW: ridgeTop + 3.0 + R() * 2.2, floors: 1, roof: P.roof === 'thatch' ? 'tile' : P.roof, pitch: 60 + R() * 6, shape: 'hip', ov: 0.3, og: 0.3, trim: 0.6 });
+    blocks.push({ kind: 'tower', cx: tx, cz: tz, th: 0, L: s, D: s, yF: y0, yW: ridgeTop + 4.2 + R() * 2.2, floors: 1, roof: P.roof === 'thatch' ? 'tile' : P.roof, pitch: 64 + R() * 6, shape: 'hip', ov: 0.3, og: 0.3, trim: 0.6 });
     main.towerSq = { x: tx, z: tz, s };
   }
   if (main.chim && (main.round || main.towerSq) && gable) { const t = main.round || main.towerSq; main.chim.z = -Math.sign(t.z) * Math.abs(main.chim.z); }
@@ -373,7 +381,7 @@ function planBlocks(P, seed, y0, fh) {
   // wings: local x runs out of the main wall; the inner gable sits at the main body's centre line, hidden
   for (const W of P.wings || []) {
     const zs = W.side === 'f' ? 1 : -1, Lw = hz + W.e;
-    blocks.push({ kind: 'wing', cx: W.a, cz: zs * Lw / 2, th: -zs * Math.PI / 2, L: Lw, D: W.w, yF: y0, yW: y0 + W.floors * fh, floors: W.floors, roof: P.roof, pitch: P.pitch, shape: 'gable', sag: 0.02 + R() * 0.03, inner: true });
+    blocks.push({ kind: 'wing', cx: W.a, cz: zs * Lw / 2, th: -zs * Math.PI / 2, L: Lw, D: W.w, yF: y0, yW: wallTop(W.floors), floors: W.floors, roof: P.roof, pitch: P.pitch, shape: 'gable', sag: 0.02 + R() * 0.03, inner: true });
   }
   // dormers on the front roof: little gabled boxes whose fronts stand a little up the slope
   if (P.dormers && P.roof !== 'thatch') {
@@ -383,9 +391,19 @@ function planBlocks(P, seed, y0, fh) {
     for (let k = 0; k < n; k++) {
       const x = n === 1 ? (R() - 0.5) * 0.8 : -reach * 0.7 + 1.4 * reach * k / (n - 1);
       if (Math.abs(x) > reach || wingOn(x) || obst.some(o => Math.abs(o.x - x) < 1.6 && o.z > 0) || (main.towerSq && main.towerSq.z > 0 && Math.abs(main.towerSq.x - x) < main.towerSq.s / 2 + 1.0)) continue;
-      const w = 1.3 + R() * 0.25, dp = Math.min(56, P.pitch + 8), dd = roofDims(P.roof, dp);
-      const yd = surf(zf) + 1.15 + R() * 0.2, ridge = yd + (w / 2) * dd.tp + 0.35;
-      const zb = Math.max(0.2, hz - (ridge + 0.35 - yW - (rd.td + rd.tt) / rd.cp) / rd.tp), Ld = zf - zb;
+      const w = 1.3 + R() * 0.25, yd0 = surf(zf) + 1.15 + R() * 0.2;
+      // its ridge has to run into the main roof below the main ridge (a taller dormer's ridge pokes out of the roof
+      // behind it): lowered as far as its window allows, then pitched as the main roof, else no dormer here
+      const lim = surf(0.4) - 0.25;
+      let dp = 0, dd = null, yd = 0;
+      for (const pq of [Math.min(56, P.pitch + 8), P.pitch]) {
+        const q = roofDims(P.roof, pq), rTop = y => y + (w / 2) * q.tp + (q.td + q.tt) / q.cp;
+        const y = Math.max(surf(zf) + 0.95, Math.min(yd0, yd0 - (rTop(yd0) - lim)));
+        if (rTop(y) <= lim) { dp = pq; dd = q; yd = y; break; }
+      }
+      if (!dd) continue;
+      const rTop = y => y + (w / 2) * dd.tp + (dd.td + dd.tt) / dd.cp;
+      const zb = hz - (rTop(yd) + 0.3 - yW - (rd.td + rd.tt) / rd.cp) / rd.tp, Ld = zf - zb;
       if (Ld < 0.8) continue;
       blocks.push({ kind: 'dormer', cx: x, cz: (zf + zb) / 2, th: -Math.PI / 2, L: Ld, D: w, yF: surf(zf) - 0.45, yW: yd, floors: 1, roof: P.roof, pitch: dp, shape: 'gable', ov: 0.2, og: 0.18, trim: 0.5, inner: true });
     }
@@ -571,17 +589,18 @@ function buildBlock(ctx, B, bi, R) {
     const ids = pts.map(([z, y, k]) => mb.v(x, y, z, n.x, 0, 0, wash.clone().multiplyScalar(k), 8, hz - sx * z, y - vf, wallCard));
     if (sx > 0) mb.tri(ids[0], ids[2], ids[1]); else mb.tri(ids[0], ids[1], ids[2]);
   }
-  // quoins: dressed stones up the corners, long and short in turn, standing a little proud of the wall (a square
-  // tower always has them, the way TotK's do)
+  // quoins: big dressed stones up the corners, long and short in turn, standing proud of the wall and butted with
+  // no plaster between them (a gap shows the lit wall and the corner reads as a ladder); their deep bevels make
+  // the dark joints. A touch greyer than the plaster, each its own tone. A square tower always has them (TotK).
   if (!dormer && (style === 'stone' || P.quoins || tw)) for (const [f1, f2] of [['f', 'r'], ['r', 'b'], ['b', 'l'], ['l', 'f']]) {
-    const h1 = len(f1) / 2, a1 = alongV(f1), a2 = alongV(f2), t = 0.035, sc = tw ? 0.85 : 1;
-    for (let y = y0 + 0.02, k = 0; y < yW - 0.3; k++) {
-      const bh = (0.27 + RQ() * 0.07) * sc, l1 = ((k % 2 ? 0.3 : 0.52) + RQ() * 0.06) * sc, l2 = ((k % 2 ? 0.52 : 0.3) + RQ() * 0.06) * sc;
+    const h1 = len(f1) / 2, a1 = alongV(f1), a2 = alongV(f2), t = 0.04, sc = tw ? 0.9 : 1;
+    for (let y = y0 + 0.02, k = 0; y < yW - 0.35; k++) {
+      const bh = Math.min((0.4 + RQ() * 0.1) * sc, yW - y), l1 = ((k % 2 ? 0.36 : 0.66) + RQ() * 0.08) * sc, l2 = ((k % 2 ? 0.66 : 0.36) + RQ() * 0.08) * sc;
       const c = onWall(f1, h1, y + bh / 2, 0).addScaledVector(a1, (t - l1) / 2).addScaledVector(a2, (l2 - t) / 2);
-      const qc = STONE.clone().multiplyScalar(0.98 + RQ() * 0.12);
-      y += bh + 0.025;
+      const qc = QUOIN.clone().multiplyScalar(0.9 + RQ() * 0.14);
+      y += bh;
       if (covered(c.clone().addScaledVector(a1, l1 * 0.3).addScaledVector(a2, -l2 * 0.3), 0.05)) continue;
-      if (lod === 0) bevelBox(mb, c, a1, V3(0, 1, 0), a2, l1 + t, bh, l2 + t, 0.03, qc, 13); else obox(mb, c, a1, V3(0, 1, 0), a2, l1 + t, bh, l2 + t, qc, 13);
+      if (lod === 0) bevelBox(mb, c, a1, V3(0, 1, 0), a2, l1 + t, bh, l2 + t, 0.04, qc, 13); else obox(mb, c, a1, V3(0, 1, 0), a2, l1 + t, bh - 0.03, l2 + t, qc, 13);
     }
   }
 
@@ -642,9 +661,9 @@ function buildBlock(ctx, B, bi, R) {
       if (!hut && !o.small) for (const s of [-1, 1]) { const sw = o.ww / 2 + 0.05; panel(o.f, o.a + s * (o.ww / 2 + 0.03 + sw / 2), o.y - 0.02, sw, o.wh + 0.04, 0.01, shut, 7, true); }
       continue;
     }
-    const fr = TIMBER;
+    const fr = FRAME;
     if (!deep) {   // small windows sit on the wall in a plain frame (a tower's in dressed stone)
-      const fc = o.slit ? STONE.clone().multiplyScalar(1.02) : TIMBER_L, fk = o.slit ? 13 : 7;
+      const fc = o.slit ? STONE.clone().multiplyScalar(1.02) : FRAME, fk = o.slit ? 13 : 7;
       slat(o.f, o.a, o.y - 0.08, o.ww + 0.2, 0.08, 0, 0.1, fc, fk); slat(o.f, o.a, o.y + o.wh, o.ww + 0.2, 0.1, 0, 0.08, o.slit ? fc : fr, fk);
       for (const s of [-1, 1]) slat(o.f, o.a + s * (o.ww / 2 + 0.04), o.y, 0.08, o.wh, 0, 0.07, o.slit ? fc : fr, fk);
       if (o.dormer && lod === 0) slat(o.f, o.a, o.y + o.wh * 0.5, o.ww, 0.04, 0, 0.035, fr);
@@ -654,7 +673,7 @@ function buildBlock(ctx, B, bi, R) {
     for (const s of [-1, 1]) slat(o.f, o.a + s * (o.ww / 2 - 0.03), o.y, 0.06, o.wh, fb, 0.05, fr);
     slat(o.f, o.a, o.y + o.wh - 0.06, o.ww, 0.06, fb, 0.05, fr); slat(o.f, o.a, o.y, o.ww, 0.06, fb, 0.05, fr);
     if (lod === 0) { slat(o.f, o.a, o.y, 0.04, o.wh, fb, 0.035, fr); slat(o.f, o.a, o.y + o.wh * 0.55, o.ww, 0.04, fb, 0.035, fr); }
-    slat(o.f, o.a, o.y - 0.085, o.ww + 0.18, 0.08, -0.04, 0.16, TIMBER_L);
+    slat(o.f, o.a, o.y - 0.085, o.ww + 0.18, 0.08, -0.04, 0.16, STONE, 13);   // a stone sill
     if (!hut) for (const s of [-1, 1]) {
       const sw = o.ww / 2 + 0.05, sa = o.a + s * (o.ww / 2 + 0.03 + sw / 2);
       slat(o.f, sa, o.y - 0.02, sw, o.wh + 0.04, 0, 0.035, shut.clone().multiplyScalar(0.8));
@@ -672,13 +691,13 @@ function buildBlock(ctx, B, bi, R) {
   if (style === 'timber' && (main || wing)) for (const f of ['f', 'b', 'l', 'r']) {
     if (B.inner && f === 'l') continue;
     const ln = len(f), half = ln / 2;
-    for (let fl = 0; fl <= floors; fl++) slat(f, 0, y0 + fl * fh - (fl === floors ? 0.2 : 0.08), ln + 0.2, 0.2, -0.02, 0.1, TIMBER);
+    for (let fl = 0; fl <= floors; fl++) slat(f, 0, (fl === floors ? yW - 0.2 : y0 + fl * fh - 0.08), ln + 0.2, 0.2, -0.02, 0.1, TIMBER);
     const posts = Math.max(2, Math.round(ln / 2.2) + 1);
     for (let k = 0; k < posts; k++) {
       const a = -half + k * ln / (posts - 1);
       if (openings.some(o => o.f === f && Math.abs(o.a - a) < o.ww / 2 + 0.25) || (f === doorFace && Math.abs(a - doorA) < door.w / 2 + 0.3)) continue;
       if (covered(onWall(f, a, y0 + 1.0, 0.1))) continue;
-      slat(f, a, y0, 0.18, floors * fh, -0.02, 0.1, TIMBER);
+      slat(f, a, y0, 0.18, yW - y0, -0.02, 0.1, TIMBER);
     }
   }
 
@@ -770,15 +789,46 @@ function roofOf(ctx, B, d) {
   // one roof plane: courses (close up, tile roofs) or a single polygon. top: the middle of its upper edge; dn:
   // down the slope; ax: along the eave; n: normal; half(t): half-length of the plane at t down the slope; sl: slope
   // length; x0 offset of the plane's centre along ax (gable planes are not trimmed)
-  const plane = (top, dn, ax, n, half, sl) => {
+  const plane = (top, dn, ax, n, half, sl, verge = false) => {
     if (roof === 'tile' && lod === 0) {
-      const pc = 2 / 4, lip = 0.08, nC = Math.ceil(sl / pc - 0.05);   // one course per texture row (texgen TILE: 4 per 2m)
+      // close up, every slab is its own piece, on the texture's lattice (texgen TILE: 4 courses × 3 slabs per 2m,
+      // course r offset by (r mod 2)/2 + SLAB_OFF[r mod 4]): each hangs its own way, its lower edge further down or
+      // tilted, its lip raised more or less, so a course's edge is a jagged run of slab ends, not one straight line
+      // (one line per course reads as weatherboard). The texture's slab face runs to just above its rim.
+      const pc = 2 / 4, lip = 0.08, nC = Math.ceil(sl / pc - 0.05), RS = RTL;
       const at = (u, t, up) => top.clone().addScaledVector(ax, u).addScaledVector(dn, t).addScaledVector(n, up);
+      const vtx = (p, nn, u, v, k = 1) => mb.v(p.x, p.y, p.z, nn.x, nn.y, nn.z, rc.clone().multiplyScalar(k), 0, u, v, rCard);
+      const face = (A, Bp, Cp, Dp, uv, out, k) => {   // quad with explicit uv, wound to face `out`
+        let nn = Bp.clone().sub(A).cross(Dp.clone().sub(A));
+        if (nn.lengthSq() < 1e-12) nn = Cp.clone().sub(A).cross(Dp.clone().sub(Bp));
+        nn.normalize(); const fl = nn.dot(out) < 0; if (fl) nn.negate();
+        const ids = [A, Bp, Cp, Dp].map((p, i) => vtx(p, nn, uv[i][0], uv[i][1], k));
+        if (fl) { mb.tri(ids[0], ids[2], ids[1]); mb.tri(ids[0], ids[3], ids[2]); } else { mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]); }
+      };
+      // a dark underlay just beneath the slabs: through any chink between them the eye meets roof, not the sky
+      // (the soffit under the deck faces down and is culled from above)
+      quad(mb, at(-half(0), 0, -0.012), at(half(0), 0, -0.012), at(half(sl), sl, -0.012), at(-half(sl), sl, -0.012), rc.clone().multiplyScalar(0.4), rCard, n, [-half(0), 0.45]);
       for (let k = 0; k < nC; k++) {
-        const t0 = k * pc, t1 = Math.min(sl, (k + 1) * pc), up = k === nC - 1 ? 0 : lip, h0 = half(t0), h1 = half(t1);
+        const t0 = k * pc, last = k === nC - 1, t1 = Math.min(sl, (k + 1) * pc), h0 = half(t0), h1 = half(t1), vb = t0 + pc * 0.86;
         if (h0 + h1 < 0.02) continue;
-        quad(mb, at(-h0, t0, 0), at(h0, t0, 0), at(h1, t1, up), at(-h1, t1, up), rc, rCard, n, [-h0, t0]);
-        if (up) quad(mb, at(-h1, t1, up), at(h1, t1, up), at(h1, t1, 0), at(-h1, t1, 0), rc.clone().multiplyScalar(0.72), rCard, dn, [-h1, t1 - 0.03]);
+        const off = (k % 2) * 0.5 + SLAB_OFF[k % 4], hm = Math.max(h0, h1);
+        for (let j = Math.floor(-hm * 1.5 + off); (j - off) / 1.5 < hm; j++) {
+          const ua = (j - off) / 1.5, ub = (j + 1 - off) / 1.5;
+          let a0 = Math.max(ua, -h0), b0 = Math.min(ub, h0), a1 = Math.max(ua, -h1), b1 = Math.min(ub, h1);
+          if (b0 - a0 < 0.02 && b1 - a1 < 0.02) continue;
+          // the end slabs of a course run out over a gable verge, each by its own amount
+          const eL = verge && ua <= -h0 ? 0.02 + RS() * 0.07 : 0, eR = verge && ub >= h0 ? 0.02 + RS() * 0.07 : 0;
+          a0 -= eL; a1 -= eL; b0 += eR; b1 += eR;
+          const slip = RS() < 0.05 ? 0.06 + RS() * 0.06 : 0, d = RS() * 0.05 + (last ? 0 : slip), sk = (RS() - 0.5) * 0.05;
+          const up = lip * (0.75 + RS() * 0.55) * (last ? 0.5 : 1), dL = d + sk, dR = d - sk, kk = 0.94 + RS() * 0.12;
+          const A = at(a0, t0, 0), Bp = at(b0, t0, 0), Cp = at(b1, t1 + dR, up), Dp = at(a1, t1 + dL, up);
+          face(A, Bp, Cp, Dp, [[a0, t0], [b0, t0], [b1, vb], [a1, vb]], n, kk);
+          // its thick lower edge, catching the light as the slab's rim does, and its two sides (closed even where a hip
+          // cuts it, so no chink opens along the hip)
+          face(Dp, Cp, at(b1, t1 + dR, 0), at(a1, t1 + dL, 0), [[a1, vb], [b1, vb], [b1, vb + 0.02], [a1, vb + 0.02]], dn, kk * 0.9);
+          face(A, Dp, at(a1, t1 + dL, 0), at(a0, t0, 0), [[a0, t0], [a1, vb], [a1, vb], [a0, t0]], ax.clone().negate(), kk * 0.8);
+          face(Bp, Cp, at(b1, t1 + dR, 0), at(b0, t0, 0), [[b0, t0], [b1, vb], [b1, vb], [b0, t0]], ax, kk * 0.8);
+        }
       }
     } else {
       const h0 = half(0), h1 = half(sl), A = top.clone().addScaledVector(ax, -h0), Bp = top.clone().addScaledVector(ax, h0);
@@ -795,11 +845,12 @@ function roofOf(ctx, B, d) {
   // a ragged eave: single tiles laid over the edge, each hanging out a little differently, so the roofline reads as
   // made of tiles (close up only; farther the straight edge is under a pixel)
   const RT = mulberry32(ctx.seed * 31 + 401 + 13 * (ctx.plan.blocks.indexOf(B) + 1));   // its own stream: only the close-up level draws these
+  const RTL = mulberry32(ctx.seed * 31 + 409 + 13 * (ctx.plan.blocks.indexOf(B) + 1));  // and the close-up slabs theirs
   const ragged = (A, Bp, n, out) => {
-    if (lod !== 0 || thatch) return;
+    if (lod !== 0 || thatch || roof === 'tile') return;   // close up, a tile roof's own slabs make its ragged edges
     const R = RT;
     const ax = Bp.clone().sub(A), Ln = ax.length(); ax.divideScalar(Ln);
-    const k = Math.max(1, Math.round(Ln / 0.5)), w = Ln / k, side = out.clone().normalize(), up = n.clone();
+    const k = Math.max(1, Math.round(Ln / 0.67)), w = Ln / k, side = out.clone().normalize(), up = n.clone();
     for (let i = 0; i < k; i++) {
       const hang = 0.02 + R() * 0.06, c = A.clone().addScaledVector(ax, (i + 0.5) * w).addScaledVector(side, hang - 0.14).addScaledVector(up, 0.025 + R() * 0.012);
       const tilt = (R() - 0.5) * 0.12, a1 = ax.clone().applyAxisAngle(up, tilt), a3 = up.clone().cross(a1).normalize();
@@ -807,20 +858,20 @@ function roofOf(ctx, B, d) {
       withChamfer(false, () => obox(mb, c, a1, up, a3.dot(side) > 0 ? a3 : a3.negate(), w * (0.92 + R() * 0.06), 0.035, 0.32, col, 0));   // too thin to chamfer
     }
   };
-  const tim = TIMBER, dark = TIMBER.clone().multiplyScalar(0.62), slopeL = Math.hypot(hz + ov, (hz + ov) * tp);
+  const tim = TIMBER, dark = TIMBER.clone().multiplyScalar(0.62), edge = rc.clone().multiplyScalar(roof === 'tile' ? 0.5 : 0.62), slopeL = Math.hypot(hz + ov, (hz + ov) * tp);
   for (const s of [1, -1]) {   // the two long planes (front and back)
     const n = V3(0, cp, s * sp), down = V3(0, -sp, s * cp), ez = s * (hz + ov);
     const o1 = n.clone().multiplyScalar(td), o2 = n.clone().multiplyScalar(td + tt);
     const top = V3(0, ridgeU, 0).add(o2), half = t => hip ? rx + (EX - rx) * (t / slopeL) : xb;
-    plane(top, down, V3(1, 0, 0), n, half, slopeL);
+    plane(top, down, V3(1, 0, 0), n, half, slopeL, !hip);
     const Eu = x => V3(x, eaveU, ez);
     quad(mb, Eu(-EX).add(o1), Eu(EX).add(o1), Eu(EX).add(o2), Eu(-EX).add(o2), rc.clone().multiplyScalar(0.7), rCard, down);       // tile edge
     quad(mb, V3(-rx, ridgeU, 0), V3(rx, ridgeU, 0), Eu(EX), Eu(-EX), dark, thatch ? 4 : 7, n.clone().negate());                      // soffit (a hip's tapers)
     ragged(Eu(-EX).add(o2), Eu(EX).add(o2), n, down);
     if (thatch) continue;
-    quad(mb, Eu(-EX), Eu(EX), Eu(EX).add(o1), Eu(-EX).add(o1), tim, 7, down);
+    quad(mb, Eu(-EX), Eu(EX), Eu(EX).add(o1), Eu(-EX).add(o1), edge, rCard, down);
     const sd = down.clone();
-    obox(mb, Eu(0).addScaledVector(n, td - 0.12 * trim).addScaledVector(sd, -0.03), V3(1, 0, 0), n, sd, 2 * EX + (hip ? 0.02 : 0.2), 0.24 * trim, 0.1 * trim, tim, 7);   // fascia
+    obox(mb, Eu(0).addScaledVector(n, -0.05 * trim).addScaledVector(sd, -0.16), V3(1, 0, 0), n, sd, hip ? 2 * (EX - 0.16 * cp) + 0.08 * trim : 2 * EX - 0.1, 0.12 * trim, 0.08 * trim, tim, 7);   // fascia, back under the tiles (a hip's meet at the corners)
     if (lod === 0 && (main || wing)) for (let x = -hx + 0.35; x <= hx - 0.3; x += 0.8) {   // rafter tails under the eave
       const a = V3(x, yW - 0.02, s * hz).addScaledVector(n, -0.08), b = Eu(x).addScaledVector(down, -0.14).addScaledVector(n, -0.08);
       if (B.inner && x < -hx + hz) continue;
@@ -839,26 +890,28 @@ function roofOf(ctx, B, d) {
       if (sx > 0) mb.tri(ids[0], ids[1], ids[2]); else mb.tri(ids[0], ids[2], ids[1]);
       ragged(Eu(hz + ov).add(o2), Eu(-(hz + ov)).add(o2), n, down);
       if (thatch) continue;
-      quad(mb, Eu(-(hz + ov)), Eu(hz + ov), Eu(hz + ov).add(o1), Eu(-(hz + ov)).add(o1), tim, 7, down);
-      obox(mb, Eu(0).addScaledVector(n, td - 0.12 * trim).addScaledVector(down, -0.03), V3(0, 0, 1), n, down, 2 * (hz + ov) + 0.02, 0.24 * trim, 0.1 * trim, tim, 7);
-      // boards up the two hips, capped with ridge tiles
+      quad(mb, Eu(-(hz + ov)), Eu(hz + ov), Eu(hz + ov).add(o1), Eu(-(hz + ov)).add(o1), edge, rCard, down);
+      obox(mb, Eu(0).addScaledVector(n, -0.05 * trim).addScaledVector(down, -0.16), V3(0, 0, 1), n, down, 2 * (hz + ov - 0.16 * cp) + 0.08 * trim, 0.12 * trim, 0.08 * trim, tim, 7);
+      // capping up the two hips: wide enough to cover the cut ends of the slabs on both sides
       for (const sz of [1, -1]) {
-        const A = V3(sx * rx, ridgeTop - 0.02, 0), Bp = V3(sx * (hx + ov), eaveU + (td + tt) / cp, sz * (hz + ov));
-        beam(mb, A, Bp, 0.16 * trim, roof === 'tile' ? C('#d29274') : rc.clone().multiplyScalar(0.9), roof === 'tile' ? 0 : rCard, V3(0, 1, 0), 0.12 * trim);
+        const A = V3(sx * rx, ridgeTop + 0.02, 0), Bp = V3(sx * (hx + ov), eaveU + (td + tt) / cp + 0.04, sz * (hz + ov)), k = Math.max(0.75, trim);
+        beam(mb, A, Bp, (roof === 'tile' ? 0.3 : 0.18) * k, rc.clone().multiplyScalar(0.9), rCard, V3(0, 1, 0), (roof === 'tile' ? 0.2 : 0.13) * k);
       }
     }
   } else {
-    // gable ends: the deck's edge, and deep bargeboards along both rakes hanging below it
+    // gable ends: the tiles run out over the gable and their thick edge is the verge (TotK's Hateno roofs have no dark
+    // boards along the rakes); a narrow bargeboard sits back under them, in their shadow
     for (const s of [1, -1]) {
       const n = V3(0, cp, s * sp), ez = s * (hz + ov), o1 = n.clone().multiplyScalar(td), o2 = n.clone().multiplyScalar(td + tt);
       const Ru = x => V3(x, ridgeU, 0), Eu = x => V3(x, eaveU, ez);
       for (const x of [xa, xb]) {
         if (B.inner && x < 0) continue;
-        quad(mb, Ru(x).add(o1), Eu(x).add(o1), Eu(x).add(o2), Ru(x).add(o2), rc.clone().multiplyScalar(0.7), rCard, V3(Math.sign(x), 0, 0));
+        quad(mb, Ru(x).add(o1), Eu(x).add(o1), Eu(x).add(o2), Ru(x).add(o2), rc.clone().multiplyScalar(0.85), rCard, V3(Math.sign(x), 0, 0));
+        quad(mb, Ru(x), Eu(x), Eu(x).add(o1), Ru(x).add(o1), edge, rCard, V3(Math.sign(x), 0, 0));
         ragged(Ru(x).add(o2), Eu(x).add(o2), n, V3(Math.sign(x), 0, 0));
         if (thatch) continue;
-        const slope = Eu(0).sub(Ru(0)), sl = slope.length(), sd = slope.clone().normalize();
-        obox(mb, Ru(x + Math.sign(x) * 0.02).add(Eu(x + Math.sign(x) * 0.02)).multiplyScalar(0.5).addScaledVector(n, td - 0.15 * trim).addScaledVector(sd, 0.04), sd, n, V3(1, 0, 0), sl + 0.12, 0.3 * trim, 0.13 * trim, TIMBER, 7);
+        const slope = Eu(0).sub(Ru(0)), sl = slope.length(), sd = slope.clone().normalize(), xi = x - Math.sign(x) * 0.12;
+        obox(mb, Ru(xi).add(Eu(xi)).multiplyScalar(0.5).addScaledVector(n, -0.06 * trim).addScaledVector(sd, 0.04), sd, n, V3(1, 0, 0), sl - 0.1, 0.13 * trim, 0.08 * trim, TIMBER, 7);
       }
     }
     if (!thatch && lod < 2 && (main || wing)) for (const sx of [1, -1]) for (const zp of [0, hz * 0.5, -hz * 0.5]) {   // purlin ends through the gables
@@ -872,14 +925,26 @@ function roofOf(ctx, B, d) {
   const r0 = hip ? -rx : xa - (B.inner ? 0 : 0.06), r1 = hip ? rx : xb + 0.06;
   if (thatch) box(mb, 0, ridgeTop - 0.08, 0, xb - xa + 0.1, 0.32, 0.55, THATCH_C.clone().multiplyScalar(0.82), 4);
   else if (r1 - r0 > 0.05) {
-    if (lod < 2) {   // half-round ridge tiles
-      const rr = 0.15 * Math.max(0.6, trim), yc = ridgeTop - 0.05, segs = 6, ids = [];
-      for (let i = 0; i <= segs; i++) {
-        const a = i / segs * Math.PI, ny = Math.sin(a), nz = Math.cos(a);
-        ids.push([r0, r1].map(x => mb.v(x, yc + ny * rr, nz * rr, 0, ny, nz, rc.clone().multiplyScalar(0.92), 0, x, a * rr, rCard)));
+    // capping tiles: half-rounds wide enough to cover the gap between the two planes' top edges, sitting just over
+    // them; close up each is its own tile, flaring toward one end so every joint steps
+    const rr = (sp * (td + tt) + 0.06) * Math.max(0.7, trim), yc = ridgeU + cp * (td + tt) + 0.02, segs = 6;
+    if (lod < 2) {
+      const n = lod === 0 ? Math.max(1, Math.round((r1 - r0) / 0.42)) : 1, len = (r1 - r0) / n;
+      for (let k = 0; k < n; k++) {
+        const xs = [r0 + k * len - (k ? 0.03 : 0), r0 + (k + 1) * len], rs = n > 1 ? [rr, rr * 1.12] : [rr, rr], ids = [];
+        const kk = 0.86 + RT() * 0.12;
+        for (let i = 0; i <= segs; i++) {
+          const a = i / segs * Math.PI, ny = Math.sin(a), nz = Math.cos(a);
+          ids.push(xs.map((x, e) => mb.v(x, yc + ny * rs[e], nz * rs[e], 0, ny, nz, rc.clone().multiplyScalar(kk), 0, x, a * rr, rCard)));
+        }
+        for (let i = 0; i < segs; i++) { mb.tri(ids[i][0], ids[i][1], ids[i + 1][0]); mb.tri(ids[i][1], ids[i + 1][1], ids[i + 1][0]); }
+        if (n > 1) {   // the flared end's rim
+          const c = [], x = xs[1];
+          for (let i = 0; i <= segs; i++) { const a = i / segs * Math.PI; c.push([mb.v(x, yc + Math.sin(a) * rs[1], Math.cos(a) * rs[1], 1, 0, 0, rc.clone().multiplyScalar(kk * 0.8), 0, a, 0, rCard), mb.v(x, yc + Math.sin(a) * rs[0] * 0.8, Math.cos(a) * rs[0] * 0.8, 1, 0, 0, rc.clone().multiplyScalar(kk * 0.8), 0, a, 0.05, rCard)]); }
+          for (let i = 0; i < segs; i++) { mb.tri(c[i][0], c[i][1], c[i + 1][0]); mb.tri(c[i][1], c[i + 1][1], c[i + 1][0]); }
+        }
       }
-      for (let i = 0; i < segs; i++) { mb.tri(ids[i][0], ids[i][1], ids[i + 1][0]); mb.tri(ids[i][1], ids[i + 1][1], ids[i + 1][0]); }
-    } else box(mb, (r0 + r1) / 2, ridgeTop, 0, r1 - r0, 0.18, 0.3, rc, rCard);
+    } else box(mb, (r0 + r1) / 2, yc + rr * 0.5, 0, r1 - r0, rr, rr * 2, rc, rCard);
   }
   if (B.kind === 'tower') box(mb, 0, ridgeTop + 0.12, 0, 0.12, 0.34, 0.12, TIMBER, 7);   // finial (every level: it tops the silhouette)
   if (dormer) return;
@@ -895,7 +960,7 @@ function mainExtras(ctx, B, d) {
   if (chim) {
     // Hateno's chimneys are massive: built into the gable, nearly as wide as it at the foot, tapering steadily like
     // a tall truncated pyramid into a stack well above the ridge. Squared-off section.
-    const H = ridgeTop + 2.2 + R() * 1.4, prof = [], segs = 16, rb = 1.4, rt = 0.62;
+    const H = ridgeTop + 1.7 + R() * 1.2, prof = [], segs = 16, rb = 1.4, rt = 0.62;
     for (let k = 0; k <= 12; k++) { const t = k / 12, y = yB + t * (H - yB); prof.push([rt + (rb - rt) * Math.pow(Math.max(0, 1 - Math.max(0, y) / H), 0.9), y]); }
     lathe(mb, chim.x, chim.z, prof, segs, wash.clone().multiplyScalar(1.0), 8, { sq: 7, sx: 0.75, sz: 1.0, rot: Math.PI / segs, v0: yB - vf, shade: j => (j === 0 ? 0.85 : j < 3 ? 0.92 : 1) });
     const hw = rt + 0.05;

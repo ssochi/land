@@ -46,8 +46,10 @@ ${LIN}
 vec3 viewPos(vec2 uv) { float z = linZ(texture2D(tDepth, uv).r); return vec3((uv * 2.0 - 1.0) * uTan * z, -z); }
 void main(){
   if (texture2D(tDepth, vUv).r >= 0.99999 || texture2D(tScene, vUv).a < 0.25) { gl_FragColor = vec4(1.0); return; }
-  vec2 px = 1.0 / uRes;
-  vec3 P = viewPos(vUv), pr = viewPos(vUv + vec2(px.x, 0.0)), pl = viewPos(vUv - vec2(px.x, 0.0)), pu = viewPos(vUv + vec2(0.0, px.y)), pd = viewPos(vUv - vec2(0.0, px.y));
+  // the normal over a 3-pixel baseline: depth steps over a single pixel are coarse enough to tilt it, and on a wall
+  // seen at a slant every step is a vertical contour, which came out as stripes of false occlusion
+  vec2 px = 1.0 / uRes, q = 3.0 * px;
+  vec3 P = viewPos(vUv), pr = viewPos(vUv + vec2(q.x, 0.0)), pl = viewPos(vUv - vec2(q.x, 0.0)), pu = viewPos(vUv + vec2(0.0, q.y)), pd = viewPos(vUv - vec2(0.0, q.y));
   vec3 dx = abs(pr.z - P.z) < abs(P.z - pl.z) ? pr - P : P - pl, dy = abs(pu.z - P.z) < abs(P.z - pd.z) ? pu - P : P - pd;
   vec3 N = normalize(cross(dx, dy));
   float z = -P.z, rpx = clamp(uRadius * uRes.y / (2.0 * uTan.y * z), 1.5, 90.0);
@@ -57,7 +59,7 @@ void main(){
     vec2 uv = vUv + vec2(cos(a), sin(a)) * sqrt(t) * rpx * px;
     if (texture2D(tScene, uv).a < 0.75) continue;
     vec3 v = viewPos(uv) - P; float vv = dot(v, v);
-    occ += max(0.0, dot(v, N) - 0.01 * z) / (vv + 0.02) * max(0.0, 1.0 - vv / (uRadius * uRadius));
+    occ += max(0.0, dot(v, N) - 0.02 * z - 0.02) / (vv + 0.02) * max(0.0, 1.0 - vv / (uRadius * uRadius));
   }
   float k = clamp(1.0 - occ * uRadius / 12.0 * 2.8, 0.0, 1.0);
   gl_FragColor = vec4(vec3(mix(k, 1.0, smoothstep(80.0, 160.0, z))), 1.0);

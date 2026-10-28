@@ -98,7 +98,7 @@ void main(){
     // building surfaces, uv in metres, textures tile every 2m: 4 thatch · 5 shingle · 6 window · 7 wood · 8 plaster
     // · 9 clay tile · 10 rubble stone · 11 lamp glass (glows by day too, brighter at night) · 13 dressed stone
     vec2 uv = vUV * 0.5; vec4 ta, tn;
-    if (vCard > 5.5 && vCard < 6.5) { ta = vec4(vec3(0.06, 0.07, 0.085) / max(vC, vec3(0.01)), 1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 1.0; }   // dark glass by day
+    if (vCard > 5.5 && vCard < 6.5) { ta = vec4(vec3(0.3, 0.34, 0.36) / max(vC, vec3(0.01)), 1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 1.0; }   // glass: a dim room behind it, the sky on it (below)
     else if (vCard > 10.5 && vCard < 11.5) { ta = vec4(1.0); tn = vec4(0.5, 0.5, 1.0, 1.0); glow = 2.0; }
     else {
       // atlas slots (texgen.js ATLAS): thatch 0 · shingle 1 · plaster 2 · wood 3 · tile 4 · rubble 5 · dressed stone 6
@@ -112,27 +112,27 @@ void main(){
         vec2 tg = vec2(-N.z, N.x) / max(length(N.xz), 1e-3), wq = vec2(dot(vSP.xz, tg), vSP.y);
         float hb = vUV.y;
         float tone = vnoise(wq * 0.4 + 3.1) * 0.65 + vnoise(wq * 1.4 + 7.7) * 0.35;
-        float edge = -0.2 + 0.8 * vnoise(vec2(wq.x * 0.7, 1.7)) + 0.25 * vnoise(vec2(wq.x * 3.1, 5.3));   // below 0: intact to the base
+        float edge = -0.35 + 0.7 * vnoise(vec2(wq.x * 0.7, 1.7)) + 0.2 * vnoise(vec2(wq.x * 3.1, 5.3));   // below 0: intact to the base
         // the edge hugs the stones: it rides up over a stone's crown and dips into the joints around it
         vec4 ra, rn; bld(5.0, uv, ra, rn);
         float aw = max(0.015, fwidth(hb)), d = hb - edge - (ra.a - 0.45) * 0.3;
         float patchN = vnoise(wq * vec2(0.9, 1.3) + 11.0) + 0.15 * vnoise(wq * 4.0 + 2.0) + (ra.a - 0.45) * 0.12;
         float bare = max(1.0 - smoothstep(-aw, aw, d), smoothstep(0.85, 0.87, patchN) * (1.0 - smoothstep(0.9, 2.1, hb)));
         ta.rgb *= (0.93 + 0.12 * tone) * mix(0.84, 1.0, smoothstep(0.0, 1.2, hb + (tone - 0.5) * 0.8));
-        // weathering (Hateno's walls are never one clean colour): patches of older, warmer plaster with a darker
+        // weathering, kept faint (TotK's Hateno walls read clean: warm white with soft tone, no dirty blotches): patches of older, warmer plaster with a darker
         // rim where the newer coat ends, lighter freshly limed patches, earth splashed up the foot along a ragged
         // line, and rain streaks running down from the eaves and from under each window sill (aSway: 1 + metres
         // below that drip edge, 0 unknown). Fine streaks fade out as they shrink under a pixel.
         float fq = 1.0 - smoothstep(0.04, 0.12, max(fwidth(wq.x), fwidth(wq.y)));
         float bn = vnoise(wq * 0.32 + 17.0) * 0.6 + vnoise(wq * 0.95 + 4.0) * 0.28 + vnoise(wq * 3.2) * 0.12 * fq;
         float blot = smoothstep(0.555, 0.585, bn), rimB = smoothstep(0.53, 0.555, bn) - blot;
-        ta.rgb *= mix(vec3(1.0), vec3(0.95, 0.92, 0.86), blot) * (1.0 - 0.05 * rimB) * (1.0 + 0.04 * smoothstep(0.66, 0.72, 1.0 - bn));
+        ta.rgb *= mix(vec3(1.0), vec3(0.985, 0.97, 0.945), blot) * (1.0 - 0.025 * rimB) * (1.0 + 0.04 * smoothstep(0.66, 0.72, 1.0 - bn));
         float gh = 0.3 + 0.55 * vnoise(vec2(wq.x * 0.6, 3.3)) + 0.2 * vnoise(wq * vec2(2.5, 1.0));
-        ta.rgb *= mix(vec3(1.0), vec3(0.84, 0.82, 0.74), (1.0 - smoothstep(gh - 0.4, gh + 0.05, hb)) * 0.8);
+        ta.rgb *= mix(vec3(1.0), vec3(0.9, 0.89, 0.84), (1.0 - smoothstep(gh - 0.4, gh + 0.05, hb)) * 0.8);
         float dd = vSw > 0.5 ? vSw - 1.0 : 2.5;
         float stN = vnoise(vec2(wq.x * 3.3, wq.y * 0.35) + 1.3) * 0.65 + vnoise(vec2(wq.x * 10.0, wq.y * 0.8) + 6.1) * 0.35 * fq;
         float streak = smoothstep(0.38, 0.78, stN) * exp(-dd * 0.85) * (0.55 + 0.45 * fq);
-        ta.rgb *= mix(vec3(1.0), vec3(0.82, 0.82, 0.78), streak);
+        ta.rgb *= mix(vec3(1.0), vec3(0.96, 0.96, 0.95), streak);
         ta.rgb *= 1.0 + 0.07 * (1.0 - smoothstep(0.0, 0.03 + aw, d)) * step(0.0, d);       // the plaster's lit edge
         if (bare > 0.001) {
           ra.rgb *= vec3(0.93, 0.91, 0.85) / max(vC, vec3(0.05)) * (1.0 - 0.4 * smoothstep(-0.06, 0.0, d) * step(d, 0.0));
@@ -142,10 +142,10 @@ void main(){
     }
     if (vCard > 8.5 && vCard < 9.5) {
       // clay tiles: the texture repeats every 2m, so each tile also gets its own shade here (the same tile lattice as
-      // texgen's TILE: 4 courses × 4 tiles, rows offset by the same hash) — the odd bright replacement and dark old
+      // texgen's TILE: 4 courses × 3 slabs, rows offset by the same hash) — the odd bright replacement and dark old
       // one — while the tiles resolve; over the roof, sun-bleached and darker patches, and moss low on the slope
       vec2 tu = vUV * 0.5; float rr = floor(tu.y * 4.0);
-      float xx = tu.x * 4.0 + mod(rr, 2.0) * 0.5 + floor(hash12(vec2(mod(rr, 4.0), 7.0)) * 3.0) / 6.0;
+      float r4 = mod(rr, 4.0), xx = tu.x * 3.0 + mod(rr, 2.0) * 0.5 + (r4 < 0.5 ? 0.0 : r4 < 1.5 ? 1.0 : r4 < 2.5 ? 0.0 : 2.0) / 6.0;
       vec2 cid = vec2(floor(xx), rr); float t1 = hash12(cid + 41.3), t2 = hash12(cid + 13.7);
       float tf = 1.0 - smoothstep(0.2, 0.5, max(fwidth(xx), fwidth(tu.y * 4.0)));
       vec3 tint = vec3(1.0 + (t1 - 0.5) * 0.2 * tf);
@@ -165,7 +165,7 @@ void main(){
       // stonework: damp and mossy at the foot, along a ragged line
       float mh = 0.35 + 0.55 * vnoise(vSP.xz * 0.9 + vSP.y * 0.3);
       float mo = (1.0 - smoothstep(mh - 0.35, mh, vH)) * smoothstep(0.35, 0.65, vnoise(vSP.xz * 1.7 + vSP.y * 1.7 + 2.0));
-      ta.rgb = mix(ta.rgb * (1.0 - 0.15 * (1.0 - smoothstep(0.0, mh, vH))), vec3(0.34, 0.4, 0.2), mo * 0.5);
+      ta.rgb = mix(ta.rgb * (1.0 - 0.12 * (1.0 - smoothstep(0.0, mh, vH))), vec3(0.4, 0.44, 0.28), mo * 0.22);
     }
     // toon: flatter relief and shallower cavities — the painted look carries the material, not fine shading
     N = perturb(N, vSP, uv, (tn.xyz * 2.0 - 1.0) * vec3(1.0 - 0.4 * uToon, 1.0 - 0.4 * uToon, 1.0));
@@ -220,7 +220,11 @@ void main(){
   // lit windows (and lantern glass): warm interior light that comes up as the sun goes down
   if (glow > 0.0) {
     vec3 Vw = normalize(cameraPosition - vSP), Rw = reflect(-Vw, N);
-    c += mix(uFogColor, uZenith, clamp(Rw.y * 1.5, 0.0, 1.0)) * (0.05 + 0.3 * pow(1.0 - max(dot(N, Vw), 0.0), 3.0)) * (1.0 - uNight);   // glass reflects the sky
+    // by day the panes are pale with the sky they reflect, as on TotK's houses (never black holes): mostly the hazy
+    // horizon, a broad diagonal sheen across each window
+    float sheen = smoothstep(0.35, 0.5, fract((dot(vSP.xz, vec2(-N.z, N.x)) + vSP.y) * 0.9)) * (1.0 - smoothstep(0.62, 0.8, fract((dot(vSP.xz, vec2(-N.z, N.x)) + vSP.y) * 0.9)));
+    vec3 sky = mix(uFogColor, uZenith, clamp(Rw.y * 1.5, 0.0, 1.0) * 0.6);
+    c = c * (glow > 1.5 ? 1.0 : 0.35) + sky * (glow > 1.5 ? 0.08 : 0.62 + 0.25 * pow(1.0 - max(dot(N, Vw), 0.0), 3.0) + 0.14 * sheen) * (1.0 - uNight);
     c = mix(c, vC * vec3(1.0, 0.72, 0.4) * (1.6 + 0.3 * sin(uTime * 2.3 + vSP.x * 3.1)), max(uNight, glow > 1.5 ? 0.55 : 0.0));
   }
   gl_FragColor = vec4(applyFog(c, vWP), alpha);

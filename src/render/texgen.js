@@ -158,31 +158,37 @@ void main(){
   gl_FragColor = vec4(c, 0.5 + 0.04 * pass + 0.05 * (g - 0.5) * (0.4 + pass) + 0.03 * (g2 - 0.5));
 }`;
 
-// Clay roof tiles (v runs down the slope): courses of flat terracotta tiles, each a little narrower than its
-// slot (uneven gaps), its lower edge bowed and slightly crooked; the lip catches the light, the top is shaded by
-// the course above. Salmon to terracotta, with the odd over-fired, sun-bleached or lichen-spotted tile.
+// Clay roof tiles (v runs down the slope): courses of flat clay slabs, wider than they are tall, as on TotK's
+// Hateno roofs. Each slab hangs its own way (its lower edge a little high or low and tilted across), its face
+// is shaded at the top by the course above it and catches the light along its thick lower rim, below which its
+// own shadow falls; neighbours butt with a hairline, one edge a touch lighter where it overlaps. No dark grout:
+// dark joints all round read as a brick pattern. Coral to pale peach, the odd over-fired or bleached slab.
 const TILE = /* glsl */`
 void main(){
   vec2 uv = vUv;
-  float rows = 4.0, cols = 4.0, r = floor(uv.y * rows), fy = fract(uv.y * rows);   // big chunky tiles (50cm), as on TotK's Hateno roofs
-  float x = uv.x * cols + mod(r, 2.0) * 0.5 + floor(h12(vec2(mod(r, rows), 7.0)) * 3.0) / 6.0, cx = floor(x), fx = fract(x);
-  vec2 cell = vec2(mod(cx, cols), mod(r, rows));
+  float rows = 4.0, cols = 3.0, r = floor(uv.y * rows), fy = fract(uv.y * rows);   // 67cm slabs on 50cm courses
+  float r4 = mod(r, 4.0), so = r4 < 0.5 ? 0.0 : r4 < 1.5 ? 1.0 : r4 < 2.5 ? 0.0 : 2.0;   // buildings.js SLAB_OFF
+  float x = uv.x * cols + mod(r, 2.0) * 0.5 + so / 6.0, cx = floor(x), fx = fract(x);
+  vec2 cell = vec2(mod(cx, cols), r4);
   float id = h12(cell + 3.1), id2 = h12(cell + 9.7), id3 = h12(cell + 5.3);
-  float sx = (fx - 0.5 - (id2 - 0.5) * 0.03) / (0.475 - 0.02 * id3);                     // −1..1 across the tile
-  float lower = 0.91 + 0.1 * (id2 - 0.5) - 0.08 * sx * sx + 0.09 * sx * (id - 0.5);      // bowed, crooked lower edge, each tile hung a little differently
-  // below the lip is the top of the next course, in the lip's shadow (not a gap); between two tiles of a course
-  // the one underneath shows, darker
-  float side = 1.0 - smoothstep(0.93, 0.99, abs(sx)), below = smoothstep(lower - 0.015, lower + 0.01, fy);
-  float lip = smoothstep(lower - 0.2, lower - 0.04, fy) * (1.0 - below), under = smoothstep(0.0, 0.35, fy);
-  float grain = pnoise(uv * 120.0, 120.0), spot = pfbm(uv * 14.0 + id, 14.0);
-  vec3 c = mix(vec3(0.84, 0.59, 0.47), vec3(0.93, 0.73, 0.61), id);                        // pale salmon to peach (TotK's sunbaked clay)
-  c = mix(c, vec3(0.7, 0.44, 0.36), step(0.88, id2) * 0.6);                               // over-fired
-  c = mix(c, vec3(0.97, 0.84, 0.72), step(0.88, id3) * 0.5);                              // sun-bleached
-  c = mix(c, vec3(0.7, 0.7, 0.5), smoothstep(0.64, 0.8, spot) * step(0.6, id2) * 0.4);    // lichen
-  c *= (0.82 + 0.18 * under) * (1.0 + 0.08 * lip) * (0.93 + 0.12 * grain) * (1.0 + 0.08 * sx * (id3 - 0.5)) * (1.0 - 0.1 * sx * sx);   // each tile slightly curved across
-  c = mix(c, c * 0.62, below);
-  c = mix(c * vec3(0.45, 0.4, 0.38), c, side);
-  float h = mix(0.25 + 0.6 * clamp(fy / lower, 0.0, 1.0), 0.18, below) * mix(0.55, 1.0, side) + grain * 0.03;
+  float sx = fx * 2.0 - 1.0;                                                             // −1..1 across the slab
+  float lower = 0.91 + 0.02 * (id2 - 0.5) + 0.02 * sx * (id - 0.5);                      // where its rim hangs (close up the slab geometry hangs it)
+  float below = smoothstep(lower - 0.012, lower + 0.012, fy);                            // under the rim: its thickness, in shadow
+  // the course above casts a soft, wavy shadow over the top of the slab
+  float topSh = smoothstep(0.02, 0.3, fy + 0.08 * (pnoise(vec2(uv.x * 9.0, r), 9.0) - 0.5));
+  float rim = smoothstep(lower - 0.09, lower - 0.03, fy) * (1.0 - below);
+  float joint = 1.0 - smoothstep(0.955, 0.985, abs(sx));                                 // hairline between slabs
+  float lap = smoothstep(0.86, 0.95, sx) * (1.0 - smoothstep(0.95, 0.985, sx));          // the overlapping edge
+  float grain = pnoise(uv * 110.0, 110.0), mott = pfbm(uv * 9.0 + id * 3.0, 9.0), spot = pfbm(uv * 14.0 + id, 14.0);
+  vec3 c = mix(vec3(0.88, 0.52, 0.38), vec3(0.94, 0.66, 0.5), id);                        // coral to peach
+  c = mix(c, vec3(0.76, 0.47, 0.37), step(0.9, id2) * 0.5);                              // over-fired
+  c = mix(c, vec3(0.95, 0.79, 0.66), step(0.92, id3) * 0.5);                             // sun-bleached
+  c = mix(c, vec3(0.72, 0.72, 0.52), smoothstep(0.66, 0.82, spot) * step(0.65, id2) * 0.35);   // lichen
+  c *= (0.9 + 0.12 * mott) * (0.95 + 0.08 * grain) * (0.95 + 0.1 * id3);
+  c *= mix(0.52, 1.0, topSh) * (1.0 + 0.13 * rim) * (1.0 + 0.07 * lap);
+  c = mix(c * 0.5, c, 1.0 - below);
+  c = mix(c * 0.72, c, joint);
+  float h = mix(0.3 + 0.55 * clamp(fy / lower, 0.0, 1.0), 0.12, below) * mix(0.7, 1.0, joint) + grain * 0.03;
   gl_FragColor = vec4(c, h);
 }`;
 
@@ -218,7 +224,8 @@ void main(){
   float grain = pnoise(vec2(x * 4.0, uv.y * 90.0 + warp * 3.0), 4.0), streak = pnoise(vec2(x * 2.0, uv.y * 300.0 + warp * 8.0), 2.0);
   float fine = pnoise(vec2(x * 30.0, uv.y * 500.0), 30.0);
   float groove = smoothstep(0.0, 0.07, fy) * smoothstep(1.0, 0.93, fy);
-  vec3 c = mix(vec3(0.5, 0.38, 0.27), vec3(0.68, 0.54, 0.39), id * 0.55 + grain * 0.45) * (0.9 + 0.12 * streak) * (0.95 + 0.08 * fine);
+  // near-neutral, so the vertex colour sets the wood (dark timber, grey-blue shutters, pale limed frames)
+  vec3 c = mix(vec3(0.72, 0.7, 0.67), vec3(0.9, 0.88, 0.84), id * 0.55 + grain * 0.45) * (0.9 + 0.12 * streak) * (0.95 + 0.08 * fine);
   c *= mix(0.6, 1.0, groove);
   gl_FragColor = vec4(c, (0.5 + grain * 0.08 + streak * 0.05 + fine * 0.03) * mix(0.4, 1.0, groove));
 }`;
