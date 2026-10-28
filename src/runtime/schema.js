@@ -27,6 +27,10 @@ export const SCHEMA = {
   terrace:   { phase: 'terrain', desc: '梯田 / 台阶化：把半径内的高度量化成一级级平台和陡坎，适合做层叠的岩台、峡谷阶地。', params: {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], radius: [NUM, undefined, ''], step: [NUM, 6, '每级高度，米'],
     sharpness: [NUM, 0.35, '陡坎占一级的比例 0–1'], falloff: [NUM, 30, '边缘过渡宽度'], warp: [NUM, 0, '陡坎位置的起伏（米）：0 时沿等高线，1–3 让台地边缘弯曲错落'], seed: [NUM, 0, ''] } },
+  ledges:    { phase: 'terrain', desc: '岩台：把半径内的坡面切成一块块不规则的平台（像哈特诺村那样），平台顺着原来的坡一级级升高、高差不等；高差大的地方是陡崖，高差小的地方是缓坡。比 terrace 更自然，适合在坡上建村。', params: {
+    x: [NUM, undefined, ''], z: [NUM, undefined, ''], radius: [NUM, undefined, ''], size: [NUM, 26, '平台平均宽度，米'],
+    tilt: [NUM, 0.12, '平台保留原坡度的比例 0–1（0 完全水平）'], jitter: [NUM, 1.2, '每块平台高度的随机增减，米'],
+    cliff: [NUM, 1.0, '大高差处崖壁的半宽，米：越小越陡'], warp: [NUM, 7, '平台轮廓的扭曲，米'], falloff: [NUM, 30, '边缘过渡宽度'], seed: [NUM, 0, ''] } },
   river:     { phase: 'terrain', desc: '沿路径挖单调下降的河床，并生成流动水面。路径从上游写到下游。', params: {
     path: [PATH, undefined, '[[x,z],…] 至少 2 点'], width: [NUM, 6, '河道宽'], depth: [NUM, 1.4, '河床深'],
     bank: [NUM, 6, '河岸坡宽'], drop: [NUM, 0.01, '每米最小落差'] } },
@@ -66,7 +70,8 @@ export const SCHEMA = {
     style: [STR, 'mixed', 'hateno | stone | timber | hut | mixed（哈特诺式为主的混合）'], gaps: [NUM, 0.15, '沿街留空地的比例 0–1（种树、菜园）'], roads: [ARR, null, '自定义道路：一条 [[x,z],…] 或多条 [[[x,z],…], …]；缺省自动生成主街和支路'],
     plaza: [NUM, 9, '广场半径，0 不要广场'], fields: [NUM, 2, '村外田地块数'], fences: [NUM, 0.55, '围篱笆后院的比例 0–1'],
     lanterns: [NUM, 16, '路灯间距，米；0 不要'], props: [NUM, 1, '杂物多少 0–2'], trees: [NUM, 1, '树木多少 0–2'], windmill: [BOOL, true, '在村外高处立风车'],
-    lawn: [NUM, 1, '村里的草被踩短、啃短的程度 0–1（0 保持 m.grass 的高度）'], seed: [NUM, 0, ''] } },
+    lawn: [NUM, 1, '村里的草被踩短、啃短的程度 0–1（0 保持 m.grass 的高度）'],
+    landmarks: [NUM, 2, '地标建筑数量 0–2：离广场最近的宅基地盖村长家（方塔）和大旅馆（老虎窗、翼楼），门前围抹灰院墙、开石拱门'], seed: [NUM, 0, ''] } },
   building:  { phase: 'objects', desc: '按参数盖一栋房屋（门朝 rotation 方向的 +z），默认先把宅基地压平。缺省的参数按 seed 随机。返回房屋尺寸和门口坐标。', params: {
     x: [NUM, undefined, ''], z: [NUM, undefined, ''], style: [STR, 'hateno', 'hateno（赭黄灰泥墙、陶瓦顶、高烟囱）| stone | timber | hut'], rotation: [NUM, 0, '弧度，0 = 门朝 +z'],
     front: [STR, null, 'eave（长边朝街）| gable（山墙朝街）'], width: [NUM, null, '正面宽，米'], depth: [NUM, null, '进深，米'], floors: [NUM, null, '1 或 2'],
@@ -76,8 +81,8 @@ export const SCHEMA = {
     dormers: [NUM, null, '前坡上的老虎窗数量'],
     banner: [BOOL, null, '临街墙上挂布幡'], porch: [BOOL, null, '门廊'], tint: [NUM, null, '百叶窗和布幡的配色编号'],
     flatten: [BOOL, true, '先压平宅基地'], seed: [NUM, 0, ''] } },
-  fence:     { phase: 'objects', desc: '沿折线立篱笆（每段 2.4m）：木栅栏或干砌石矮墙。gates 是留空当门的段号。', params: {
-    path: [PATH, undefined, '[[x,z],…]'], style: [STR, 'wood', 'wood | stone'], gates: [ARR, [], '留空的段号，如 [0, 5]'] } },
+  fence:     { phase: 'objects', desc: '沿折线立篱笆（每段 2.4m）：木栅栏、干砌石矮墙或抹灰院墙。gates 是留空当门的段号。', params: {
+    path: [PATH, undefined, '[[x,z],…]'], style: [STR, 'wood', 'wood | stone | yard（抹灰院墙）'], gates: [ARR, [], '留空的段号，如 [0, 5]'] } },
   field:     { phase: 'objects', desc: '开一块田：地面翻成带垄沟的耕地，按行种上作物，可选围篱笆。', params: {
     center: [XZ, undefined, ''], size: [XZ, [18, 12], '[长, 宽]，米；垄沿长边'], rotation: [NUM, 0, '弧度'], crop: [STR, 'wheat', 'wheat | cabbage'],
     fence: [STR, null, 'wood | stone，缺省不围'], seed: [NUM, 0, ''] } },
@@ -100,6 +105,7 @@ export const SIGS = {
   flatten: 't.flatten(x, z, { radius, height, falloff, strength, warp, mode })',
   plateau: 't.plateau(x, z, { radius, height, cliff, ledges, warp, seed })',
   terrace: 't.terrace(x, z, { radius, step, sharpness, falloff, warp, seed })',
+  ledges: 't.ledges(x, z, { radius, size, tilt, jitter, cliff, warp, falloff, seed })',
   smooth: 't.smooth(x, z, { radius, iterations, strength })',
   erode: 't.erode({ grid, droplets, strength, inertia, capacity, seed })',
   apply: 't.apply((x, z, h) => 新高度, { grid })',
@@ -111,14 +117,14 @@ export const SIGS = {
   place: 'm.place(kind, x, z, { scale, rotation, variant })  → { x, y, z }',
   grass: 'm.grass({ center, radius, density, height, rules })',
   env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, toon, outline, snowLine, streaks, pollen, rock, grass, water })',
-  village: 'm.village({ center, radius, houses, style, gaps, roads, plaza, fields, fences, lanterns, props, trees, windmill, lawn, seed })',
+  village: 'm.village({ center, radius, houses, style, gaps, roads, plaza, fields, fences, lanterns, props, trees, windmill, lawn, landmarks, seed })',
   building: 'm.building(x, z, { style, rotation, front, width, depth, floors, roof, roofShape, pitch, chimney, tower, towerShape, wings, dormers, banner, porch, tint, flatten, seed })',
   fence: 'm.fence(path, { style, gates })', field: 'm.field({ center, size, rotation, crop, fence, seed })',
   camera: 'm.camera(name, { label, at, eye, look, lookEye, fov } | { label, pos, target, fov })'
 };
 
 // op name -> how the call is spelled in scene.js (report rows)
-export const CALL = { noise: 't.noise', mountains: 't.mountains', peak: 't.peak', hill: 't.hill', flatten: 't.flatten', plateau: 't.plateau', terrace: 't.terrace', smooth: 't.smooth', erode: 't.erode', apply: 't.apply', thermal: 't.thermal',
+export const CALL = { noise: 't.noise', mountains: 't.mountains', peak: 't.peak', hill: 't.hill', flatten: 't.flatten', plateau: 't.plateau', terrace: 't.terrace', ledges: 't.ledges', smooth: 't.smooth', erode: 't.erode', apply: 't.apply', thermal: 't.thermal',
   river: 'm.water.river', lake: 'm.water.lake', path: 'm.path', scatter: 'm.scatter', place: 'm.place', grass: 'm.grass', env: 'm.env', camera: 'm.camera', village: 'm.village', building: 'm.building', fence: 'm.fence', field: 'm.field' };
 
 // fill defaults and type-check one call. Returns { error } or { p, warn, def }.

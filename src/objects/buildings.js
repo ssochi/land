@@ -219,7 +219,8 @@ export function houseParams(seed, p = {}) {
   const pitch = p.pitch || (roof === 'thatch' ? 46 + u[5] * 6 : roof === 'tile' ? 38 + u[5] * 8 : 40 + u[5] * 8);
   let chimney = p.chimney != null ? p.chimney : !hut || u[6] < 0.4;
   if (chimney === true) chimney = style === 'hateno' && u[7] < 0.85 ? 'tall' : 'stack';
-  const tower = typeof p.tower === 'number' ? p.tower : p.tower != null ? (p.tower ? 1.45 + u[9] * 0.45 : 0) : style === 'hateno' && u[8] < 0.32 ? 1.45 + u[9] * 0.45 : 0;
+  // towers are landmarks: one house in eight or so (the village gives its chief's house one)
+  const tower = typeof p.tower === 'number' ? p.tower : p.tower != null ? (p.tower ? 1.45 + u[9] * 0.45 : 0) : style === 'hateno' && u[8] < 0.14 ? 1.45 + u[9] * 0.45 : 0;
   const towerShape = p.towerShape || (u[19] < 0.55 ? 'square' : 'round');
   const doorA0 = p.doorA != null ? p.doorA : (front === 'gable' ? (u[16] - 0.5) * 0.6 : (u[16] - 0.5) * Math.max(0, (front === 'gable' ? depth : width) - 3.4) * 0.6);
   // a square tower stands at a front corner, the end away from the door (TotK's chief's house); a round one at a

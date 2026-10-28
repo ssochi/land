@@ -18,14 +18,14 @@ defineScene((m) => {
   t.peak(380, -640, { radius: 260, height: 120, sharpness: 1.25, ridges: 0.5, seed: 10 });
   t.erode({ grid: 'far', droplets: 90000, seed: 12 });
   t.erode({ grid: 'detail', droplets: 20000, strength: 0.45, seed: 13 });
-  // 村子所在的坡切成几级台地，台地之间是白色石灰岩陡坎（哈特诺村就建在一层层岩台上）
-  t.terrace(0, -8, { radius: 80, step: 3.4, sharpness: 0.1, falloff: 40, warp: 3.5, seed: 3 });
+  // 村子所在的坡切成一块块高低不等的岩台，高差大处是白色石灰岩陡崖（哈特诺村就建在一层层岩台上）
+  t.ledges(0, -8, { radius: 85, size: 30, tilt: 0.1, jitter: 1.5, cliff: 0.9, warp: 8, falloff: 40, seed: 3 });
 
   // 小溪从崖下流过村西
   m.water.river([[-150, -120], [-112, -80], [-96, -30], [-102, 25], [-128, 75]], { width: 4.5, depth: 1.1, bank: 4 });
 
   // ── 村子 ──
-  const v = m.village({ center: [0, -8], radius: 62, houses: 18, style: 'mixed', gaps: 0.18, fields: 3, lanterns: 15, trees: 1.4, seed: 4 });
+  const v = m.village({ center: [0, -8], radius: 68, houses: 18, style: 'mixed', gaps: 0.18, fields: 3, lanterns: 15, trees: 1.4, seed: 4 });
   const pond = m.water.lake(-130, 85, { fill: 1.5, maxRadius: 34 });
   m.log(`${v.houses.length} 栋房屋 · 风车 ${v.windmill} · 池塘水位 ${pond ? pond.level : '-'}`);
 

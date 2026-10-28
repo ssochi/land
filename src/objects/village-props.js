@@ -225,6 +225,43 @@ function stall(seed) {
   return geo(mb, { colliders: [[-1.0, 0, 0.7], [0, 0, 0.7], [1.0, 0, 0.7]] });
 }
 
+// yard wall (the low wall round TotK's chief's house): one 2.4m span of plastered wall with a softly rounded top;
+// its stucco frays here and there at the foot, showing the rubble inside, as on the houses
+const YARD_WASH = ['#efe2c6', '#ecd8b0', '#e9cf9f'];
+export const makeYardWall = (seed, lod = 0) => withDetail(lod, () => yardWall(seed));
+function yardWall(seed) {
+  const R = mulberry32(seed), mb = new MB(), h = 0.95, t = 0.44, top = h - 0.15;
+  const body = Poly.box(2.46, h, t, { u: X }).translate(0, h / 2 - 0.15, 0)
+    .bevel({ width: 0.15, segments: 3, select: (a, b) => a.y > top - 0.01 && b.y > top - 0.01 }).jitter(0.012, 2, R() * 100);
+  put(mb, body, C(YARD_WASH[seed % 3]).multiplyScalar(0.96 + R() * 0.06), 8, { v0: 0.7 });   // v starts high: a low wall only frays at its foot
+  return geo(mb, { colliders: [[-0.8, 0, 0.3], [0, 0, 0.3], [0.8, 0, 0.3]] });
+}
+
+// arch gate set in a yard wall's line (local x along the wall): two plastered piers carry a round arch of dressed
+// voussoirs under a plastered spandrel and a coping stone, an opening 1.6m wide and 2.4m to the crown
+export const makeArchGate = (seed, lod = 0) => withChamfer(lod === 0, () => withDetail(lod, () => archGate(seed)));
+function archGate(seed) {
+  const R = mulberry32(seed), mb = new MB(), wash = C(YARD_WASH[seed % 3]);
+  const ow = 1.6, r = ow / 2, spring = 1.6, pr = 0.6, t = 0.52, W = ow + 2 * pr, top = spring + r + 0.55;
+  // piers and spandrel as one plastered slab with the arch cut out: a 2D outline (x across, y up) extruded through t
+  const out = [[-W / 2, -0.15], [-r, -0.15], [-r, spring]];
+  for (let i = 1; i < 12; i++) { const a = Math.PI - i / 12 * Math.PI; out.push([Math.cos(a) * r, spring + Math.sin(a) * r]); }
+  out.push([r, spring], [r, -0.15], [W / 2, -0.15], [W / 2, top], [-W / 2, top]);
+  const slab = Poly.prism(out.map(([x, y]) => [x, -y]), t, { u: X }).translate(0, -t / 2, 0).rotate(X, Math.PI / 2)
+    .bevel({ width: 0.05, segments: 2 }).jitter(0.01, 2, R() * 100);
+  put(mb, slab, wash, 8, { v0: 0.15 });
+  // voussoirs round the opening, standing a little proud of the plaster, a keystone at the crown
+  for (let i = 0, n = 9; i < n; i++) {
+    const a = Math.PI - (i + 0.5) / n * Math.PI, key = i === (n - 1) / 2, rr = r + 0.17;
+    const stone = Poly.box(Math.PI * rr / n - 0.03, key ? 0.42 : 0.34, t + 0.08, { u: X }).bevel({ width: 0.03, segments: 1 }).jitter(0.008, 4, R() * 100);
+    put(mb, stone, STONE.clone().multiplyScalar(1.05 + R() * 0.12), 13, { at: M.makeRotationZ(a - Math.PI / 2).setPosition(Math.cos(a) * rr, spring + Math.sin(a) * rr, 0) });
+  }
+  // impost blocks at the springing and a coping along the top
+  for (const s of [-1, 1]) put(mb, Poly.box(0.42, 0.18, t + 0.1).bevel({ width: 0.03, segments: 1 }), STONE.clone().multiplyScalar(1.08), 13, { at: M.makeTranslation(s * (r + 0.15), spring - 0.04, 0) });
+  put(mb, Poly.box(W + 0.16, 0.16, t + 0.14).bevel({ width: 0.04, segments: 1 }).jitter(0.008, 3, R() * 100), STONE.clone().multiplyScalar(1.04), 13, { at: M.makeTranslation(0, top + 0.06, 0) });
+  return geo(mb, { colliders: [[-(r + pr / 2), 0, 0.42], [r + pr / 2, 0, 0.42]] });
+}
+
 // windmill: tapered octagonal stone tower, shingled cap, four-armed rotor with sails facing +z
 export const makeWindmill = (seed, lod = 0) => withChamfer(lod === 0, () => windmill(seed));
 function windmill(seed) {
