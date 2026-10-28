@@ -79,6 +79,8 @@ export const SCHEMA = {
     tower: [BOOL, null, '塔楼：方塔立在临街一角（王国之泪式，角石 + 四坡尖顶），圆塔在屋后角'], towerShape: [STR, null, 'square | round'],
     roofShape: [STR, null, 'gable 双坡 | hip 四坡'], wings: [ARR, null, '翼楼 [{ side: "f"|"b", a, w, e, floors }]：主屋前后墙上接出的双坡翼楼（L / T / 十字形平面），a 沿屋脊的偏移、w 宽、e 伸出长度；[] 不要'],
     dormers: [NUM, null, '前坡上的老虎窗数量'],
+    pergola: [BOOL, null, '门前的木廊架：挂大灯笼和招牌，顶上爬着藤（旅馆门口那样）'], deck: [BOOL, null, '山墙一侧的木平台：立柱撑在地上，带栏杆和台阶'],
+    lean: [BOOL, null, '山墙一侧的披檐柴棚：单坡瓦顶、两根柱子、里面码着木柴'], sign: [BOOL, null, '门边木托架上挂的招牌'], ivy: [BOOL, null, '一面墙上从地面爬上去的藤'],
     banner: [BOOL, null, '临街墙上挂布幡'], porch: [BOOL, null, '门廊'], tint: [NUM, null, '百叶窗和布幡的配色编号'],
     flatten: [BOOL, true, '先压平宅基地'], seed: [NUM, 0, ''] } },
   fence:     { phase: 'objects', desc: '沿折线立篱笆（每段 2.4m）：木栅栏、干砌石矮墙或抹灰院墙。gates 是留空当门的段号。', params: {
@@ -118,7 +120,7 @@ export const SIGS = {
   grass: 'm.grass({ center, radius, density, height, rules })',
   env: 'm.env({ time, wind, windDir, fogDensity, haze, hazeFar, valleyFog, clouds, glare, toon, outline, snowLine, streaks, pollen, rock, grass, water })',
   village: 'm.village({ center, radius, houses, style, gaps, roads, plaza, fields, fences, lanterns, props, trees, windmill, lawn, landmarks, seed })',
-  building: 'm.building(x, z, { style, rotation, front, width, depth, floors, roof, roofShape, pitch, chimney, tower, towerShape, wings, dormers, banner, porch, tint, flatten, seed })',
+  building: 'm.building(x, z, { style, rotation, front, width, depth, floors, roof, roofShape, pitch, chimney, tower, towerShape, wings, dormers, pergola, deck, lean, sign, ivy, banner, porch, tint, flatten, seed })',
   fence: 'm.fence(path, { style, gates })', field: 'm.field({ center, size, rotation, crop, fence, seed })',
   camera: 'm.camera(name, { label, at, eye, look, lookEye, fov } | { label, pos, target, fov })'
 };

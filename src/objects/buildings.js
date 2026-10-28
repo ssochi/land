@@ -208,7 +208,7 @@ function planter(mb, c, ax, on, w, bloom, R) {
 //   lot: [w, d] the ground the house needs and lotC its centre (model frame; the lot is not centred when a wing
 //   reaches out on one side).
 export function houseParams(seed, p = {}) {
-  const R = mulberry32(seed), u = Array.from({ length: 32 }, () => R());
+  const R = mulberry32(seed), u = Array.from({ length: 40 }, () => R());
   const style = p.style || ['hateno', 'hateno', 'stone', 'timber'][Math.floor(u[0] * 4)], hut = style === 'hut';
   const front = p.front || (hut ? 'eave' : u[1] < 0.35 ? 'gable' : 'eave');
   const long = hut ? 4.2 + u[2] * 1.2 : 7.4 + u[2] * 2.6, short = hut ? 3.6 + u[3] * 0.8 : 5.4 + u[3] * 1.4;
@@ -255,8 +255,12 @@ export function houseParams(seed, p = {}) {
     }
   }
   const dormers = p.dormers != null ? p.dormers : !hut && roof !== 'thatch' && L >= 6.5 && u[29] < 0.45 ? 1 + Math.floor(u[30] * Math.min(3, (L - 3.5) / 2.2)) : 0;
+  // attachments (the clutter of a lived-in house): a timber pergola with a big lantern and a sign before the door,
+  // a raised deck with a railing on a gable end, a lean-to woodshed, a shop sign on a bracket, ivy up a wall
+  const pick = (k, v, chance) => (p[k] != null ? !!p[k] : !hut && v < chance);
+  const pergola = pick('pergola', u[31], 0.1), deck = pick('deck', u[32], 0.16), lean = pick('lean', u[33], 0.16), sign = pick('sign', u[34], 0.18), ivy = pick('ivy', u[35], 0.3);
   const Q = { style, front, width: +width.toFixed(2), depth: +depth.toFixed(2), floors, roof, pitch: +pitch.toFixed(1), chimney: chimney || false,
-    tower: +tower.toFixed(2), towerSide, chimSide, banner, quoins, porch, tint, wash, roofShape, towerShape, wings, dormers, doorA: +doorA.toFixed(2),
+    tower: +tower.toFixed(2), towerSide, chimSide, banner, quoins, porch, tint, wash, roofShape, towerShape, wings, dormers, pergola, deck, lean, sign, ivy, doorA: +doorA.toFixed(2),
     base: p.base || 1.2, lift: p.lift || 0, steps: p.steps || 0 };
   // ground needed: the walls' footprints, overhangs and a chimney outside its gable, a porch, in the model frame
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
@@ -278,7 +282,34 @@ export function houseFootprints(P, m = 0) {
   }
   if (P.chimney === 'tall') add((gable ? -1 : P.chimSide) * (hx + 0.55), 0, 2.2, 2.6);
   if (P.porch) { if (gable) add(hx + 1.0, 0, 2.0, 3.6); else add(P.doorA, hz + 1.0, 3.6, 2.0); }
+  if (P.pergola) { if (gable) add(hx + 1.0, P.doorA, 2.0, 3.4); else add(P.doorA, hz + 1.0, 3.4, 2.0); }
+  const g = freeGables(P);
+  if (P.deck && g[0]) add(g[0] * (hx + 1.0), 0, 2.1, Math.min(D - 0.6, 4.4));
+  const ls = P.lean && leanSpot(P);
+  if (ls) { if (ls.face === 'b') add(-ls.a, -(hz + 1.1), ls.ln + 0.5, 2.3); else add((ls.face === 'r' ? 1 : -1) * (hx + 1.1), 0, 2.3, ls.ln + 0.5); }
   return out;
+}
+// gable ends (roof frame: −1 the −x end, +1 the +x end) free for a deck or a lean-to: not where the tall chimney
+// stands, not a gable-front house's door gable, not where the tower's corner is
+function freeGables(P) {
+  const gable = P.front === 'gable', out = [];
+  for (const sx of [-1, 1]) {
+    if (P.chimney === 'tall' && (gable ? -1 : P.chimSide) === sx) continue;
+    if (gable && sx > 0) continue;
+    if (P.tower && (gable ? -1 : P.towerSide) === sx) continue;
+    out.push(sx);
+  }
+  return out;
+}
+// where a lean-to goes (roof frame): against a free gable (the second one when a deck has the first), else against
+// the back wall at the end away from the chimney, clear of wings; { face, a, ln } or null
+function leanSpot(P) {
+  const gable = P.front === 'gable', L = gable ? P.depth : P.width, D = gable ? P.width : P.depth, g = freeGables(P), gl = g[P.deck ? 1 : 0];
+  if (gl) return { face: gl > 0 ? 'r' : 'l', a: 0, ln: Math.min(D - 0.8, 3.8) };
+  const ln = Math.min(L * 0.45, 3.6), xs = gable ? 1 : -(P.chimSide || 1), x = xs * (L / 2 - ln / 2 - 0.3);   // roof-frame x of its middle
+  if ((P.wings || []).some(W => W.side === 'b' && Math.abs(W.a - x) < W.w / 2 + ln / 2 + 0.3)) return null;
+  if (P.tower && P.towerShape === 'round' && !gable && Math.sign(x) === P.towerSide) return null;
+  return { face: 'b', a: -x, ln };   // on the back wall the along-coordinate runs toward −x
 }
 const squareTower = r => +(1.75 * r + 0.35).toFixed(2);   // side of a square tower for the round one's radius r
 // where the tower stands (roof frame): a gable-front house's at the back gable's corner; an eave-front house's
@@ -552,7 +583,7 @@ function buildBlock(ctx, B, bi, R) {
       pyramid(mb, lp.x, lp.y + 0.12, lp.z, lw / 2 + 0.05, 0.12, IRON, 0);
       ud.lights.push([lp.x + dO.x * 0.2, lp.y, lp.z + dO.z * 0.2, 7]);
     }
-    if (!hut) {
+    if (!hut && !P.pergola) {
       // canopy: a tilted roof of tiles over the door on two angled brackets (pots only where the ground is near,
       // and only close up)
       const cw = door.w + 0.75, cd = 0.8, cy = y0 + door.h + 0.42, tilt = 0.36;
@@ -856,6 +887,8 @@ function mainExtras(ctx, B, d) {
     }
   }
 
+  attachments(ctx, B, d);
+
   // porch: a lean-to on posts over the front door (stone and timber houses)
   if (P.porch) {
     const pw = Math.min(len(doorFace) - 0.6, 3.4), pd = 1.9, py = y0 + door.h + 0.55, dO = outN(doorFace);
@@ -865,5 +898,137 @@ function mainExtras(ctx, B, d) {
     quad(mb, W(a0 - pw / 2, py + 0.42, 0), W(a0 + pw / 2, py + 0.42, 0), W(a0 + pw / 2, py - 0.08, pd), W(a0 - pw / 2, py - 0.08, pd), TIMBER, 7, V3(-dO.x, -1, -dO.z));
     for (const s of [-1, 1]) { const b = W(a0 + s * (pw / 2 - 0.12), y0, pd - 0.12); box(mb, b.x, (y0 + py) / 2, b.z, 0.16, py - y0, 0.16, TIMBER, 7); }
     const dp = W(doorA, 0, pd + 0.8); ud.door = [dp.x, dp.z];
+  }
+}
+
+// ── attachments: pergola, deck, lean-to, shop sign, ivy (the main body's frame) ──
+const LEAF_D = C('#3f6e2a');
+function attachments(ctx, B, d) {
+  const { P, mb, lod, yB } = ctx, { y0, doorFace, door, onWall, outN, alongV, len, ud } = d;
+  const RA = mulberry32(ctx.seed * 31 + 211), doorA = P.doorA, roofTile = B.roof === 'tile';
+  const tile = C('#c9704c'), plank = TIMBER_L, dark = TIMBER;
+  const ground = -P.steps;   // the ground at the door (a flight of steps when the house stands up on its base)
+  // ivy leaves along a run of wall or timber: small overlapping leaf quads facing out, darker inside the clump; a
+  // farther level keeps every second (or fourth) leaf, larger, so the clump keeps its shape and tone
+  const leaves = (pts, on, spread, R) => {
+    const keep = [1, 2, 4][lod], sc = Math.sqrt(keep);
+    pts.forEach((c, k) => {
+      const s = (0.07 + R() * 0.05) * sc, out = 0.02 + R() * spread, tone = 0.7 + R() * 0.5, rot = R() * 6.283;
+      if (k % keep) return;
+      const ax = V3(Math.cos(rot), Math.sin(rot) * 0.8, 0); ax.applyAxisAngle(V3(0, 1, 0), Math.atan2(on.x, on.z)); ax.normalize();
+      const ay = on.clone().cross(ax).normalize(), q = c.clone().addScaledVector(on, out), col = LEAF_D.clone().multiplyScalar(tone);
+      const n = on.clone().multiplyScalar(0.7).add(V3(0, 0.6, 0)).normalize();
+      const ids = [[-1, 0], [0, -0.6], [1, 0], [0, 0.6]].map(([a, b]) => { const p = q.clone().addScaledVector(ax, a * s).addScaledVector(ay, b * s); return mb.v(p.x, p.y, p.z, n.x, n.y, n.z, col, 0, 0, 0, 0); });
+      mb.tri(ids[0], ids[1], ids[2]); mb.tri(ids[0], ids[2], ids[3]); mb.tri(ids[0], ids[2], ids[1]); mb.tri(ids[0], ids[3], ids[2]);
+    });
+  };
+  // a big lantern hanging at p: glass in an iron frame under a hipped cap, lit after dusk
+  const lantern = (p, s = 1) => {
+    const lw = 0.32 * s;
+    beam(mb, p.clone().setY(p.y + 0.5 * s), p.clone().setY(p.y + 0.22 * s), 0.025, IRON, 0);
+    box(mb, p.x, p.y, p.z, lw - 0.03, 0.4 * s, lw - 0.03, GLOW, 11);
+    for (const [px, pz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) box(mb, p.x + px * lw / 2, p.y, p.z + pz * lw / 2, 0.035, 0.42 * s, 0.035, IRON, 0);
+    box(mb, p.x, p.y - 0.23 * s, p.z, lw + 0.06, 0.05, lw + 0.06, IRON, 0);
+    pyramid(mb, p.x, p.y + 0.2 * s, p.z, lw / 2 + 0.08, 0.2 * s, IRON, 0);
+    ud.lights.push([p.x, p.y, p.z, 9]);
+  };
+  // a hanging signboard at p across `ax`, an emblem painted on both faces
+  const signboard = (p, ax, on) => {
+    const w = 0.7, h = 0.42, col = C(['#a3456b', '#3f5f8f', '#5f7f3f', '#b0703a'][P.tint % 4]);
+    obox(mb, p, ax, V3(0, 1, 0), on, w, h, 0.05, plank, 7);
+    for (const s of [-1, 1]) beam(mb, p.clone().addScaledVector(ax, s * w * 0.35).setY(p.y + h / 2), p.clone().addScaledVector(ax, s * w * 0.35).setY(p.y + h / 2 + 0.22), 0.015, IRON, 0);
+    for (const sd of [-1, 1]) {   // emblem: a coloured disc with a pale bar, on both faces
+      const c = p.clone().addScaledVector(on, sd * 0.028), nn = on.clone().multiplyScalar(sd), ids = [], ctr = mb.v(c.x, c.y, c.z, nn.x, nn.y, nn.z, col, 0, 0, 0, 0);
+      for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283, q = c.clone().addScaledVector(ax, Math.cos(a) * 0.14).add(V3(0, Math.sin(a) * 0.14, 0)); ids.push(mb.v(q.x, q.y, q.z, nn.x, nn.y, nn.z, col, 0, 0, 0, 0)); }
+      for (let i = 0; i < 12; i++) { const a = ids[i], b = ids[(i + 1) % 12]; const e = mb.p; const pa = V3(e[a * 3], e[a * 3 + 1], e[a * 3 + 2]), pb = V3(e[b * 3], e[b * 3 + 1], e[b * 3 + 2]); if (pa.sub(c).cross(pb.sub(c)).dot(nn) > 0) mb.tri(ctr, a, b); else mb.tri(ctr, b, a); }
+    }
+  };
+
+  // pergola: two posts out front and two against the wall, beams and rafters over, a big lantern and the house's
+  // sign hung from the front beam, ivy along the top (the inn's entrance in TotK)
+  if (P.pergola) {
+    const f = doorFace, w = door.w + 2.2, dp = 1.9, top = y0 + door.h + 0.95, ax = alongV(f), on = outN(f);
+    for (const s of [-1, 1]) {
+      const a = doorA + s * w / 2;
+      beam(mb, onWall(f, a, ground - 0.2, dp), onWall(f, a, top + 0.1, dp), 0.22, dark);
+      beam(mb, onWall(f, a, top, 0), onWall(f, a, top, dp + 0.3), 0.2, dark);                   // beams back to the wall
+      beam(mb, onWall(f, a, top - 0.6, dp - 0.02), onWall(f, a, top - 0.02, dp - 0.55), 0.09, dark);   // knee braces
+      beam(mb, onWall(f, a, top - 0.6, 0.02), onWall(f, a, top - 0.02, 0.5), 0.09, dark);
+    }
+    beam(mb, onWall(f, doorA - w / 2 - 0.35, top + 0.14, dp), onWall(f, doorA + w / 2 + 0.35, top + 0.14, dp), 0.22, dark);   // front beam
+    for (let k = 0; k <= 5; k++) { const a = doorA - w / 2 + 0.15 + k * (w - 0.3) / 5; beam(mb, onWall(f, a, top + 0.3, 0), onWall(f, a, top + 0.3, dp + 0.3), 0.11, plank); }
+    const lp = onWall(f, doorA - 0.55, top - 0.62, dp - 0.15); lantern(lp, 1.15);
+    signboard(onWall(f, doorA + 0.55, top - 0.42, dp), ax, on);
+    const vines = [];   // ivy draped along the front beam and over the rafters
+    for (let k = 0; k < 320; k++) { const t = RA(), a = doorA - w / 2 - 0.3 + t * (w + 0.6), hang = RA() * RA(); vines.push(onWall(f, a, top + 0.4 - hang * 1.1, dp - 0.2 + (RA() - 0.5) * 0.8 * (1 - hang))); }
+    for (let k = 0; k < 90; k++) { const s = RA() < 0.5 ? -1 : 1; vines.push(onWall(f, doorA + s * w / 2 + (RA() - 0.5) * 0.3, ground + RA() * (top - ground), dp + (RA() - 0.5) * 0.3)); }   // and up a post
+    leaves(vines, on, 0.12, RA);
+    ud.colliders.push(...[-1, 1].map(s => { const p = onWall(f, doorA + s * w / 2, 0, dp); return [p.x, p.z, 0.25]; }));
+  }
+
+  // deck: a timber platform at floor level on posts down to the ground, boards, a railing on its open sides and a
+  // short flight of steps (the decks along Hateno's houses)
+  const g = freeGables(P);
+  if (P.deck && g[0]) {
+    const sx = g[0], f = sx > 0 ? 'r' : 'l', ln = Math.min(len(f) - 0.6, 4.4), dp = 2.1, yT = y0 - 0.02;
+    const at = (a, y, o) => onWall(f, a, y, o), on = outN(f), ax = alongV(f);
+    for (const a of [-ln / 2 + 0.1, 0, ln / 2 - 0.1]) for (const o of [0.25, dp - 0.1]) beam(mb, at(a, yB, o), at(a, yT - 0.06, o), 0.15, dark);
+    obox(mb, at(0, yT - 0.06, dp / 2), ax, V3(0, 1, 0), on, ln + 0.2, 0.12, dp + 0.05, plank, 7);
+    if (lod === 0) for (let k = 1; k < 9; k++) obox(mb, at(0, yT + 0.001, k * dp / 9), ax, V3(0, 1, 0), on, ln + 0.18, 0.012, 0.012, dark, 0);   // board joints
+    const rail = (a0, o0, a1, o1) => { beam(mb, at(a0, yT + 0.92, o0), at(a1, yT + 0.92, o1), 0.08, dark); beam(mb, at(a0, yT + 0.45, o0), at(a1, yT + 0.45, o1), 0.05, plank); };
+    for (const a of [-ln / 2 + 0.1, 0, ln / 2 - 0.1]) beam(mb, at(a, yT, dp - 0.1), at(a, yT + 0.96, dp - 0.1), 0.09, dark);
+    for (const s of [-1, 1]) beam(mb, at(s * (ln / 2 - 0.1), yT, 0.25), at(s * (ln / 2 - 0.1), yT + 0.96, 0.25), 0.09, dark);
+    rail(-ln / 2 + 0.1, dp - 0.1, ln / 2 - 0.1, dp - 0.1); rail(ln / 2 - 0.1, 0.25, ln / 2 - 0.1, dp - 0.1);
+    rail(-ln / 2 + 0.1, 0.25, -ln / 2 + 0.1, dp - 1.1);   // the end left open toward the steps
+    for (let k = 0; k < 4; k++) obox(mb, at(-ln / 2 - 0.3 - k * 0.0, yT - 0.18 - k * 0.17, dp - 0.5 + k * 0.0), ax, V3(0, 1, 0), on, 0.55, 0.06, 0.8, plank, 7);
+    // a door onto it
+    const dc = at(0.6, y0 - 0.02, -0.01);
+    quad(mb, dc.clone().addScaledVector(ax, -0.46), dc.clone().addScaledVector(ax, 0.46), dc.clone().addScaledVector(ax, 0.46).setY(y0 + 1.95), dc.clone().addScaledVector(ax, -0.46).setY(y0 + 1.95), plank.clone().multiplyScalar(0.85), 7, on);
+    for (const a of [-ln / 2, 0, ln / 2]) { const p = at(a, 0, dp / 2); ud.colliders.push([p.x, p.z, 0.9]); }
+  }
+
+  // lean-to: an open woodshed against a gable, a single slope of tiles on two posts, logs stacked inside
+  const ls = P.lean && leanSpot(P);
+  if (ls) {
+    const f = ls.face, ln = ls.ln, dp = 2.2, hi = y0 + 2.5, lo = y0 + 1.85, on = outN(f), ax = alongV(f);
+    const at = (a, y, o) => onWall(f, a, y, o), aOff = ls.a;
+    for (const s of [-1, 1]) {
+      beam(mb, at(aOff + s * (ln / 2 - 0.1), yB, dp - 0.1), at(aOff + s * (ln / 2 - 0.1), lo, dp - 0.1), 0.14, dark);
+      beam(mb, at(aOff + s * (ln / 2 - 0.1), hi, 0), at(aOff + s * (ln / 2 - 0.1), lo, dp + 0.05), 0.12, dark);   // rafters
+    }
+    beam(mb, at(aOff - ln / 2 - 0.1, lo + 0.04, dp - 0.1), at(aOff + ln / 2 + 0.1, lo + 0.04, dp - 0.1), 0.13, dark);
+    const n = on.clone().multiplyScalar(Math.sin(Math.atan2(hi - lo, dp))).add(V3(0, Math.cos(Math.atan2(hi - lo, dp)), 0)).normalize();
+    const A = at(aOff - ln / 2 - 0.25, hi + 0.12, -0.02), Bq = at(aOff + ln / 2 + 0.25, hi + 0.12, -0.02), Cq = at(aOff + ln / 2 + 0.25, lo - 0.02, dp + 0.35), Dq = at(aOff - ln / 2 - 0.25, lo - 0.02, dp + 0.35);
+    quad(mb, A, Bq, Cq, Dq, roofTile ? TILE_C : SHINGLE_T[0], roofTile ? 9 : 5, n, [0, 0]);
+    quad(mb, A.clone().addScaledVector(n, -0.08), Bq.clone().addScaledVector(n, -0.08), Cq.clone().addScaledVector(n, -0.08), Dq.clone().addScaledVector(n, -0.08), dark.clone().multiplyScalar(0.7), 7, n.clone().negate());
+    quad(mb, Dq, Cq, Cq.clone().addScaledVector(n, -0.08), Dq.clone().addScaledVector(n, -0.08), tile.clone().multiplyScalar(0.75), 0, on.clone().add(V3(0, -0.5, 0)));
+    // logs stacked against the wall
+    for (let row = 0; row < 4; row++) for (let k = 0, m = Math.floor((ln - 0.6) / 0.24); k < m - (row % 2); k++) {
+      const a = aOff - ln / 2 + 0.42 + k * 0.24 + (row % 2) * 0.12, c = at(a, y0 - 0.1 + row * 0.2, 0.45);
+      const bark = C('#6e5440').multiplyScalar(0.85 + RA() * 0.3);
+      obox(mb, c, ax, V3(0, 1, 0), on, 0.2, 0.18, 0.7, bark, 7);
+      if (lod < 2) quad(mb, c.clone().addScaledVector(on, 0.351).addScaledVector(ax, -0.09).setY(c.y - 0.08), c.clone().addScaledVector(on, 0.351).addScaledVector(ax, 0.09).setY(c.y - 0.08), c.clone().addScaledVector(on, 0.351).addScaledVector(ax, 0.09).setY(c.y + 0.08), c.clone().addScaledVector(on, 0.351).addScaledVector(ax, -0.09).setY(c.y + 0.08), C('#c99c68'), 0, on);
+    }
+    for (const s of [-1, 0, 1]) { const p = at(aOff + s * ln / 3, 0, dp / 2); ud.colliders.push([p.x, p.z, 0.8]); }
+  }
+
+  // shop sign: a board hung from a timber bracket beside the door
+  if (P.sign && !P.pergola) {
+    const f = doorFace, a = doorA + door.w / 2 + 0.75, on = outN(f), ax = alongV(f), y = y0 + door.h + 0.35;
+    beam(mb, onWall(f, a, y + 0.3, 0), onWall(f, a, y + 0.3, 0.95), 0.08, dark);
+    beam(mb, onWall(f, a, y - 0.25, 0), onWall(f, a, y + 0.27, 0.7), 0.06, dark);
+    signboard(onWall(f, a, y - 0.12, 0.62), on, ax);
+  }
+
+  // ivy: a clump climbing a wall from the ground, thinning out as it goes up
+  if (P.ivy) {
+    const faces = ['f', 'b', 'l', 'r'].filter(f => f !== doorFace), f = faces[Math.floor(RA() * faces.length)], ln = len(f), on = outN(f);
+    const a0 = (RA() - 0.5) * (ln - 2.4), wd = 1.2 + RA() * 1.4, ht = 1.6 + RA() * 2.0, pts = [];
+    for (let k = 0; k < 420; k++) {
+      const u = RA() * 2 - 1, v = Math.pow(RA(), 1.4), a = a0 + u * wd * (1 - 0.55 * v), y = y0 - 0.1 + v * ht * (0.75 + 0.35 * Math.cos(u * 2.1 + a0));
+      if (Math.abs(a) > ln / 2 - 0.1) continue;
+      pts.push(onWall(f, a, y, 0));
+    }
+    leaves(pts, on, 0.06, RA);
   }
 }

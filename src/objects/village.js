@@ -125,8 +125,8 @@ export function buildHouse(x, z, r, params, seed, flatten = true, level = null) 
 // landmark buildings, given the lots nearest the plaza (Hateno's chief's house with its square tower, the big
 // inn with dormers and a wing behind); each gets a walled front yard with an arch gate
 const LANDMARKS = [
-  { style: 'hateno', front: 'eave', width: 10.6, depth: 7.2, floors: 2, tower: 1.55, towerShape: 'square', roofShape: 'gable', wings: [], dormers: 0, chimney: 'tall', quoins: true, banner: false, porch: false },
-  { style: 'hateno', front: 'eave', width: 12.4, depth: 7.6, floors: 2, tower: 0, roofShape: 'gable', wings: [{ side: 'b', a: 3.2, w: 4.6, e: 4.2, floors: 2 }], dormers: 3, chimney: 'tall', quoins: true, banner: true, porch: false }
+  { style: 'hateno', front: 'eave', width: 10.6, depth: 7.2, floors: 2, tower: 1.55, towerShape: 'square', roofShape: 'gable', wings: [], dormers: 0, chimney: 'tall', quoins: true, banner: false, porch: false, pergola: false, deck: false, lean: true, sign: false, ivy: true },
+  { style: 'hateno', front: 'eave', width: 12.4, depth: 7.6, floors: 2, tower: 0, roofShape: 'gable', wings: [{ side: 'b', a: 3.2, w: 4.6, e: 4.2, floors: 2 }], dormers: 3, chimney: 'tall', quoins: true, banner: true, porch: false, pergola: true, deck: true, lean: false, sign: true, ivy: false }
 ];
 const YARD = 5.2;   // depth of a landmark's front yard
 
