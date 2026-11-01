@@ -5,10 +5,10 @@
 ```
 core      随机数、噪声、堆。纯函数，没有状态。
   ↓
-world     DETAIL / FAR 两层高度网格，派生标量场（WATER、WDIST、FLOW、OCC、COVER、FOREST、PATH），
+world     DETAIL / FAR 两层高度网格，派生标量场（WATER、WDIST、FLOW、OCC、COVER、FOREST、PATH、TILL、LAWN），
           折线工具（polyline.js），以及 terrainVer 等构建版本号。heightAt / normalAt / moistureAt 等查询都在这里。
   ↓
-terrain   塑形操作（noise、mountains、peak、hill、flatten、plateau、terrace、smooth、apply）、侵蚀（erode、thermal）、土路（path.js）、
+terrain   塑形操作（noise、mountains、peak、hill、flatten、plateau、terrace、ledges、smooth、apply）、侵蚀（erode、thermal）、土路（path.js）、
           崖面位移（crag.js：网格和 groundAt 共用，物件 / 草 / 第一人称都踩在实际画出的岩面上）。
 water     河道开挖（river.js）、湖泊泛洪（lake.js），水体场的惰性重算（water.js）。
 objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures / undergrowth / buildings / village-props 生成器）、
@@ -16,8 +16,8 @@ objects   模型库（kinds.js 注册表 + trees / flowers / rocks / structures 
   ↓
 runtime   参数 schema 与校验、scene.js 拿到的 `m` 对象（api.js）、不含渲染的世界生成流程（generate.js）。
   ↓
-render    three.js：共享 uniform、通用 GLSL、材质贴图烘焙（texgen.js：岩石 / 草地地面 / 土路的反照率、法线、凹陷遮蔽）、
-          各类材质与网格构建、阴影、湖面反射、地平线图、后期、风痕、飞絮、时刻。
+render    three.js：共享 uniform、通用 GLSL（光照含卡通两阶明暗，见 docs/stylization.md）、材质贴图烘焙（texgen.js：岩石 / 草地地面 / 土路的反照率、法线、凹陷遮蔽）、
+          各类材质与网格构建、阴影、湖面反射、地平线图、后期（描边、泛光、光束、调色）、风痕、飞絮、时刻。
   ↓
 app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称（walker.js 纯物理，first-person.js 键鼠 / 触屏输入）、DOM 界面、window.mapEditor。
 ```
@@ -70,12 +70,12 @@ app       编辑器编排（editor.js）、镜头、鼠标拨草、第一人称�
 
 **新增一种模型**
 
-1. 在 `src/objects/` 写生成器 `makeXxx(seed)`，用 `mesh-builder.js` 的 `MB` 和各种 `add*` 拼网格，返回 `BufferGeometry`。
+1. 在 `src/objects/` 写生成器 `makeXxx(seed)`，返回 `BufferGeometry`。网格用建模工具 `poly/`（基本体 + 倒角、细分、挤出等，`toMB` 烘焙进 `MB`，见 [modeling.md](modeling.md)）或 `mesh-builder.js` 的 `MB` 和各种 `add*` 直接拼。
 2. 在 `src/objects/kinds.js` 的 `KINDS` 登记（变体数、材质族、间距、遮蔽等），在 `KIND_DOCS` 写一句说明。
-3. LOD：生成器接收第二个参数 `lod`（0 最精细），在 `KINDS` 里写 `lod: [d1, d2]` 切换距离（米），需要远处剔除的写 `cull`。`render/props.js` 每帧按距离把实例分到各级的 InstancedMesh 里。
+3. LOD：生成器接收第二个参数 `lod`（0 最精细），在 `KINDS` 里写 `lod: [d1, d2]` 切换距离（米），需要远处剔除的写 `cull`。`render/props.js` 按距离把实例分到各级的 InstancedMesh 里，换级时两级交叉淡化约 0.6 秒（实例属性 `aFade`，`common.glsl.js` 的 `lodClip`）。各级必须是同一个模型、只少看不见的细节：用 `poly/` 建模的直接把近景代码包在 `withDetail(lod, fn)` 里；只在某些级别画的细节用单独的随机数流。改完用 `node tools/lod-check.mjs <kind>` 检查换级时画面变了多少。
 4. 依赖脚本参数的模型（比如指定尺寸的房屋）用 `customVariant(kind, params)` 换一个 ≥1000 的变体号，生成器的第三个参数就是这份参数。
 
-**材质卡号**（顶点属性 `aCard`，`render/props.js` 的着色器按它选材质）：0 顶点色 · 1 叶片卡片 · 2 砌石（砌缝由着色器画）· 3 岩石贴图（三向投影，随 `m.env({ rock })` 换色）· 4 茅草 · 5 木瓦 · 6 窗玻璃（白天暗、夜里亮）· 7 木板 · 8 灰泥 · 9 陶土瓦 · 10 乱石 · 11 灯罩（白天也微亮）· 20 以上是风车叶轮（绕轮毂转动，卡号 − 20 是材质）。4–10 用米为单位的 uv 采样 `texgen.js` 烘焙的建筑材质图集（一张 2048×1024，4×2 格，每格中间 448px 是贴图、四周 32px 是绕回的边，按连续 uv 的梯度采样，平铺处没有 mip 接缝）。
+**材质卡号**（顶点属性 `aCard`，`render/props.js` 的着色器按它选材质）：0 顶点色 · 1 叶片卡片 · 2 砌石（砌缝由着色器画）· 3 岩石贴图（三向投影，随 `m.env({ rock })` 换色）· 4 茅草 · 5 木瓦 · 6 窗玻璃（白天暗、夜里亮）· 7 木板 · 8 灰泥 · 9 陶土瓦 · 10 乱石 · 11 灯罩（白天也微亮）· 12 远处树冠的叶团（顶点色，和叶片卡片一样在阴影里仍透进一部分阳光）· 13 条石（墙角石、石阶、烟囱帽）· 20 以上是风车叶轮（绕轮毂转动，卡号 − 20 是材质）。4–10 和 13 用米为单位的 uv 采样 `texgen.js` 烘焙的建筑材质图集（一张 2048×1024，4×2 格，每格中间 448px 是贴图、四周 32px 是绕回的边，按连续 uv 的梯度采样，平铺处没有 mip 接缝）。灰泥（8）的 v 是离墙脚的高度：着色器据此让墙脚的灰泥剥落、露出乱石，自己做灰泥面时让 v 从墙脚起算（`box`、`lathe` 都能给起始 v；不该剥落的部件给一个大的起始 v）。
 
 **纹理单元上限**：WebGL 只保证每个着色器 16 个纹理单元，多数 GPU（Windows 上的 ANGLE、Mac、手机）就是 16；超过的材质编译失败，直接不画。无头渲染用的 SwiftShader 允许 32，出图看不出来，所以 `editor.js` 在每次构建后的第一帧统计每个着色器用了几个纹理单元，超过 16 就在控制台报错（`tools/render.mjs` 会打印出来）。新增贴图时优先并进图集，不要再加单独的 sampler。
 

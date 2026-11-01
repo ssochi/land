@@ -96,7 +96,7 @@ void main(){
   // backlit blades glow: light through the leaf, strongest toward the tips and when looking into the sun
   lit += uSunColor * mix(tip, vec3(0.75, 0.9, 0.35), 0.35) * pow(max(dot(V, uSunDir), 0.0), 1.6) * vT * (0.5 + 0.6 * (1.0 - uSunDir.y)) * gShadow;
   lit += vec3(0.21, 0.23, 0.12) * vGust * smoothstep(0.45, 1.0, vT) * gShadow;
-  gl_FragColor = vec4(applyFog(lit, vWP), 1.0);
+  gl_FragColor = vec4(applyFog(lit, vWP), 0.5);   // alpha 0.5 marks grass: the outline pass (post.js) skips it
 }`, {
   uRoot: { value: PAL.root }, uMid: { value: PAL.mid }, uTipA: { value: PAL.tipA }, uTipB: { value: PAL.tipB }, uPush: { value: PUSH },
   tField: { value: FIELD }, uField: { value: new THREE.Vector4(DETAIL.min, DETAIL.step, DETAIL.n, 1 / DETAIL.n) },

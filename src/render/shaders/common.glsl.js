@@ -5,7 +5,7 @@ uniform float uTime; uniform float uWind; uniform vec2 uWindDir;
 uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 uSkyAmb; uniform vec3 uGroundAmb;
 uniform vec3 uFogColor; uniform vec3 uZenith; uniform float uFogDensity; uniform float uDebug;
 uniform float uHazeFar; uniform vec3 uVFog; uniform float uCloudCover; uniform float uGlare; uniform float uNight;
-uniform vec4 uPL[12]; uniform vec3 uPLColor;
+uniform vec4 uPL[12]; uniform vec3 uPLColor; uniform float uToon; uniform vec3 uShadeTint;
 uniform sampler2D uShadowMap; uniform mat4 uShadowMatrix; uniform float uShadowOn; uniform float uShadowTexel;
 uniform sampler2D uHz0; uniform sampler2D uHz1; uniform sampler2D uHzAO; uniform vec2 uHzMin; uniform float uHzSize;
 uniform vec4 uMA0; uniform vec4 uMA1; uniform vec4 uMB0; uniform vec4 uMB1; uniform float uHzW; uniform float uSunTan; uniform float uHzOn;
@@ -16,11 +16,26 @@ float shadowAt(vec3 wp, vec3 N) {
   vec3 p = sc.xyz * 0.5 + 0.5;
   if (p.x <= 0.0 || p.y <= 0.0 || p.x >= 1.0 || p.y >= 1.0 || p.z >= 1.0) return 1.0;
   float edge = smoothstep(0.0, 0.1, min(min(p.x, p.y), min(1.0 - p.x, 1.0 - p.y)));
+  // a 3-texel box over bilinearly weighted depth tests (4 × 4 texel centres, the outer ones weighted by how far
+  // the point sits between centres): smooth shadow edges instead of the stair steps of a grid of hard tests,
+  // which show wherever a shadow falls along a wall at a grazing angle
+  vec2 t = p.xy / uShadowTexel - 0.5, f = fract(t), b = (floor(t) - 0.5) * uShadowTexel;
   float s = 0.0;
-  for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) {
-    s += step(p.z - 0.0004, texture2D(uShadowMap, p.xy + vec2(float(i), float(j)) * uShadowTexel * 1.25).r);
+  for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+    float wx = i == 0 ? 1.0 - f.x : i == 3 ? f.x : 1.0, wy = j == 0 ? 1.0 - f.y : j == 3 ? f.y : 1.0;
+    s += wx * wy * step(p.z - 0.0004, texture2D(uShadowMap, b + (vec2(float(i), float(j)) + 0.5) * uShadowTexel).r);
   }
   return mix(1.0, s / 9.0, edge);
+}
+// LOD cross-fade (src/render/props.js): while a model swaps level, both levels are drawn for a moment and
+// split the screen's pixels between them by a dither threshold, the old one dissolving as the new one fills
+// in. fade 0: drawn whole; h in (0, 1): the outgoing level, gone where the dither < h; −h: the incoming one,
+// there only where the dither < h — together every pixel is drawn exactly once. Interleaved gradient noise
+// (Jimenez) spreads the kept pixels evenly, so mid-fade reads as a blend rather than a pattern.
+bool lodClip(float fade, vec2 px) {
+  if (fade == 0.0) return false;
+  float d = fract(52.9829189 * fract(dot(px, vec2(0.06711056, 0.00583715))));
+  return fade > 0.0 ? d < fade : d >= -fade;
 }
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
@@ -57,7 +72,16 @@ vec3 lighting(vec3 alb, vec3 N, vec3 wp, float sharp) {
     vec3 L = uPL[i].xyz - wp; float d = length(L), att = max(0.0, 1.0 - d / uPL[i].w);
     pl += uPLColor * att * att * (max(dot(N, L / max(d, 1e-3)), 0.0) * 0.75 + 0.25);
   }
-  return alb * (amb + uSunColor * diff * gShadow + pl * uNight);
+  // toon (m.env toon, 0–1), the anime / BotW look: the light falls in one soft-edged band instead of a long
+  // gradient, over a shade that is lifted (ambient up, sun down a little: same exposure, less contrast), keeps
+  // and deepens the surface's own hue (a yellow wall shades to warm ochre, not olive) and leans cool. Fades
+  // out at night, where the lanterns light the scene.
+  float L = diff * gShadow, t = uToon * (1.0 - uNight);
+  float lit = mix(L, smoothstep(0.2, 0.5, L) * 0.82 + L * 0.18, t);
+  vec3 ambT = amb * (1.0 + 0.75 * t);
+  float lum = dot(alb, vec3(0.299, 0.587, 0.114));
+  vec3 shade = mix(alb, max(mix(vec3(lum), alb, 1.35), 0.0), t * 0.7) * ambT * mix(vec3(1.0), uShadeTint, t);
+  return mix(shade, alb * (ambT + uSunColor * (1.0 - 0.3 * t)), lit) + alb * pl * uNight;
 }
 // height fog + aerial perspective (distant land collapses into a flat haze-coloured silhouette)
 // + an optional valley-fog layer below uVFog.x (thickness uVFog.y, density uVFog.z) broken into drifting banks

@@ -18,12 +18,14 @@ defineScene((m) => {
   t.peak(380, -640, { radius: 260, height: 120, sharpness: 1.25, ridges: 0.5, seed: 10 });
   t.erode({ grid: 'far', droplets: 90000, seed: 12 });
   t.erode({ grid: 'detail', droplets: 20000, strength: 0.45, seed: 13 });
+  // 村子所在的坡切成一块块高低不等的岩台，高差大处是白色石灰岩陡崖（哈特诺村就建在一层层岩台上）
+  t.ledges(0, -8, { radius: 85, size: 30, tilt: 0.1, jitter: 1.5, cliff: 0.9, warp: 8, falloff: 40, seed: 3 });
 
   // 小溪从崖下流过村西
   m.water.river([[-150, -120], [-112, -80], [-96, -30], [-102, 25], [-128, 75]], { width: 4.5, depth: 1.1, bank: 4 });
 
   // ── 村子 ──
-  const v = m.village({ center: [0, -8], radius: 62, houses: 18, style: 'mixed', gaps: 0.18, fields: 3, lanterns: 15, trees: 1.4, seed: 4 });
+  const v = m.village({ center: [0, -8], radius: 68, houses: 18, style: 'mixed', gaps: 0.18, fields: 3, lanterns: 15, trees: 1.4, seed: 4 });
   const pond = m.water.lake(-130, 85, { fill: 1.5, maxRadius: 34 });
   m.log(`${v.houses.length} 栋房屋 · 风车 ${v.windmill} · 池塘水位 ${pond ? pond.level : '-'}`);
 
@@ -37,19 +39,26 @@ defineScene((m) => {
   m.scatter('flower.buttercup', { count: 2600, area: m.ring(0, -8, 20, 140), rules: { slope: [0, 0.45], noise: { scale: 0.045, threshold: 0.55, seed: 6 } }, seed: 19 });
   m.scatter('reed', { count: 90, area: m.circle(-105, 20, 75), rules: { waterDist: [0.3, 3] }, minSpacing: 1.2, seed: 20 });
   m.scatter('rock.boulder', { count: 16, area: m.ring(0, -8, 60, 160), rules: { slope: [0.1, 0.7] }, scale: [0.6, 1.6], minSpacing: 10, seed: 21 });
+  // 岩台陡坎边上的灌木，打破陡坎平直的边（王国之泪的哈特诺村，坎边总长着灌木）
+  m.scatter('bush', { count: 60, area: m.circle(0, -8, 80), rules: { slope: [0.3, 1.4] }, minSpacing: 2.2, seed: 25 });
   m.grass({ center: [0, -8], radius: 175 });
 
-  // ── 环境：下午偏暖的阳光，空气里有点雾气 ──
-  m.env({ time: 0.74, wind: 0.3, fogDensity: 0.0034, haze: '#c2cfc6', hazeFar: 0.5, clouds: 0.5, snowLine: 330, rock: '#d2cfc4' });
+  // ── 环境：接近正午的阳光，空气通透、偏青（对着王国之泪的哈特诺村截图取的色） ──
+  m.env({ time: 0.62, wind: 0.3, fogDensity: 0.0034, haze: '#cfe2e0', hazeFar: 0.5, clouds: 0.5, snowLine: 330, rock: '#d2cfc4',
+    grass: { root: '#47693a', mid: '#6c9750', tipA: '#bccf8c', tipB: '#98bf6e' } });   // TotK's Hateno: cooler, greener lawns
 
   // ── 镜头：从生成结果里取位置 ──
   const road = v.roads[0].points, hs = v.houses, h0 = hs[0], h1 = hs[Math.min(2, hs.length - 1)];
-  m.camera('overview', { label: '村子全景', at: [40, 52], eye: 9, look: [-6, -22], lookEye: 3, fov: 58 });
+  m.camera('overview', { label: '村子全景', at: [30, 28], eye: 24, look: [0, -12], lookEye: 5, fov: 56 });   // over the shelves to the landmarks and the windmill
   m.camera('street', { label: '主街', at: road[1], eye: 1.8, look: road[3], lookEye: 3, fov: 58 });
   m.camera('house', { label: '村屋', at: h0.street, eye: 1.7, look: [h0.x, h0.z], lookEye: 3.2, fov: 62 });
   const near = (h, t) => [h.door[0] + (h.street[0] - h.door[0]) * t, h.door[1] + (h.street[1] - h.door[1]) * t];
   m.camera('door', { label: '门前', at: near(h1, 0.6), eye: 1.7, look: [h1.x, h1.z], lookEye: 2.6, fov: 64 });
-  m.camera('plaza', { label: '广场', at: [v.plaza.x + 12, v.plaza.z + 10], eye: 2.2, look: [v.plaza.x, v.plaza.z], lookEye: 1.5, fov: 58 });
+  const pd = [road[3][0] - v.plaza.x, road[3][1] - v.plaza.z], pl = Math.hypot(...pd);   // from the main street, 14m out of the plaza
+  m.camera('plaza', { label: '广场', at: [v.plaza.x + pd[0] / pl * 14, v.plaza.z + pd[1] / pl * 14], eye: 3.4, look: [v.plaza.x, v.plaza.z], lookEye: 1.5, fov: 58 });
   m.camera('lane', { label: '小巷', at: v.roads[1] ? v.roads[1].points[2] : road[4], eye: 1.8, look: v.roads[1] ? v.roads[1].points[0] : road[2], lookEye: 2.5, fov: 58 });
-  if (v.windmill) m.camera('windmill', { label: '风车', at: [v.windmill[0] + 8, v.windmill[1] + 46], eye: 2.5, look: v.windmill, lookEye: 6, fov: 50 });
+  if (v.windmill) {   // from the village side, high enough to see over the roofs
+    const wd = [v.plaza.x - v.windmill[0], v.plaza.z - v.windmill[1]], wl = Math.hypot(...wd);
+    m.camera('windmill', { label: '风车', at: [v.windmill[0] + wd[0] / wl * 40, v.windmill[1] + wd[1] / wl * 40], eye: 7, look: v.windmill, lookEye: 6, fov: 50 });
+  }
 });

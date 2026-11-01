@@ -23,6 +23,80 @@ export class MB {
 
 export const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 
+// Cut the triangles from index t0 on (mb.i) along planes a grid step g apart, in the two axes that lie closest to each
+// triangle's plane, so a smooth deformation applied afterwards bends a big face instead of only moving its corners.
+// Only faces wider than a cell are cut; cut points interpolate every attribute, and edges that coincide are cut at the
+// same points (the grid is global), so faces that met still meet after the deformation. Faces wholly below yMin
+// (where the deformation is nil) are left whole; gOf(card) can give a material its own (coarser) step.
+export function sliceGrid(mb, t0, g, yMin = -Infinity, gOf = null) {
+  const tris = mb.i.splice(t0), P = mb.p, A = [P, mb.n, mb.c, mb.uv], W = [3, 3, 3, 2];
+  const rec = i => ({ id: i, a: A.map((arr, j) => arr.slice(i * W[j], i * W[j] + W[j])), s: mb.s[i], k: mb.k[i] });
+  const lerp = (u, v, t) => ({ id: -1, a: u.a.map((x, j) => x.map((q, m) => q + (v.a[j][m] - q) * t)), s: u.s + (v.s - u.s) * t, k: u.k });
+  const idOf = v => {
+    if (v.id >= 0) return v.id;
+    const nn = v.a[1], l = Math.hypot(nn[0], nn[1], nn[2]) || 1;
+    return (v.id = mb.v(v.a[0][0], v.a[0][1], v.a[0][2], nn[0] / l, nn[1] / l, nn[2] / l, { r: v.a[2][0], g: v.a[2][1], b: v.a[2][2] }, v.s, v.a[3][0], v.a[3][1], v.k));
+  };
+  // a convex polygon split by the plane coord[ax] = c into the parts below and above it
+  const split = (poly, ax, c) => {
+    const lo = [], hi = [];
+    for (let i = 0; i < poly.length; i++) {
+      const u = poly[i], v = poly[(i + 1) % poly.length], du = u.a[0][ax] - c, dv = v.a[0][ax] - c;
+      if (du <= 0) lo.push(u); if (du >= 0) hi.push(u);
+      if ((du < 0 && dv > 0) || (du > 0 && dv < 0)) { const m = lerp(u, v, du / (du - dv)); lo.push(m); hi.push(m); }
+    }
+    return [lo, hi];
+  };
+  for (let t = 0; t < tris.length; t += 3) {
+    const ia = tris[t], ib = tris[t + 1], ic = tris[t + 2];
+    const ext = [0, 1, 2].map(j => Math.max(P[ia * 3 + j], P[ib * 3 + j], P[ic * 3 + j]) - Math.min(P[ia * 3 + j], P[ib * 3 + j], P[ic * 3 + j]));
+    const gs = gOf ? gOf(mb.k[ia]) || g : g;
+    if ((ext[0] <= gs && ext[1] <= gs && ext[2] <= gs) || Math.max(P[ia * 3 + 1], P[ib * 3 + 1], P[ic * 3 + 1]) <= yMin) { mb.i.push(ia, ib, ic); continue; }
+    const e1 = [0, 1, 2].map(j => P[ib * 3 + j] - P[ia * 3 + j]), e2 = [0, 1, 2].map(j => P[ic * 3 + j] - P[ia * 3 + j]);
+    const nn = [Math.abs(e1[1] * e2[2] - e1[2] * e2[1]), Math.abs(e1[2] * e2[0] - e1[0] * e2[2]), Math.abs(e1[0] * e2[1] - e1[1] * e2[0])];
+    const drop = nn[0] >= nn[1] && nn[0] >= nn[2] ? 0 : nn[1] >= nn[2] ? 1 : 2;
+    let polys = [[rec(ia), rec(ib), rec(ic)]];
+    for (const ax of [0, 1, 2]) {
+      if (ax === drop) continue;
+      const out = [];
+      for (const poly of polys) {
+        let lo = Infinity, hi = -Infinity; for (const v of poly) { lo = Math.min(lo, v.a[0][ax]); hi = Math.max(hi, v.a[0][ax]); }
+        if (hi - lo <= gs) { out.push(poly); continue; }
+        let rest = poly;
+        for (let c = (Math.floor(lo / gs) + 1) * gs; c < hi - 1e-6; c += gs) {
+          if (c <= lo + 1e-6) continue;
+          const [below, above] = split(rest, ax, c);
+          if (below.length >= 3) out.push(below);
+          rest = above;
+        }
+        if (rest.length >= 3) out.push(rest);
+      }
+      polys = out;
+    }
+    for (const poly of polys) { const ids = poly.map(idOf); for (let j = 1; j < ids.length - 1; j++) mb.i.push(ids[0], ids[j], ids[j + 1]); }
+  }
+}
+
+// Move the vertices from v0 on by a smooth displacement field f(x, y, z, out) (writes [dx, dy, dz] into out), turning
+// their normals with the field's Jacobian (forward differences), so a face that bows also shades as bowing.
+// pts: extra [x, y, z, …] points (lamps, smoke) moved along.
+export function warp(mb, v0, f, pts = []) {
+  const P = mb.p, N = mb.n, h = 0.03, d = [0, 0, 0], e = [0, 0, 0], J = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  for (let i = v0 * 3; i < P.length; i += 3) {
+    const x = P[i], y = P[i + 1], z = P[i + 2];
+    f(x, y, z, d);
+    f(x + h, y, z, e); J[0] = (e[0] - d[0]) / h; J[3] = (e[1] - d[1]) / h; J[6] = (e[2] - d[2]) / h;
+    f(x, y + h, z, e); J[1] = (e[0] - d[0]) / h; J[4] = (e[1] - d[1]) / h; J[7] = (e[2] - d[2]) / h;
+    f(x, y, z + h, e); J[2] = (e[0] - d[0]) / h; J[5] = (e[1] - d[1]) / h; J[8] = (e[2] - d[2]) / h;
+    // J[r + 3c] = ∂d_c/∂x_r: the normal moves by −Jᵀn
+    const nx = N[i], ny = N[i + 1], nz = N[i + 2];
+    const mx = nx - (J[0] * nx + J[3] * ny + J[6] * nz), my = ny - (J[1] * nx + J[4] * ny + J[7] * nz), mz = nz - (J[2] * nx + J[5] * ny + J[8] * nz), l = Math.hypot(mx, my, mz);
+    P[i] = x + d[0]; P[i + 1] = y + d[1]; P[i + 2] = z + d[2];
+    if (l > 1e-9) { N[i] = mx / l; N[i + 1] = my / l; N[i + 2] = mz / l; }
+  }
+  for (const q of pts) { f(q[0], q[1], q[2], d); q[0] += d[0]; q[1] += d[1]; q[2] += d[2]; }
+}
+
 // swept tube with parallel-transported frames; colorFn(t, angle, P), swayFn(P)
 export function addTube(mb, pts, radii, segs, colorFn, swayFn) {
   const rings = [];
@@ -51,7 +125,7 @@ export function icoDirs(detail) {
   g.dispose(); return (ICO[detail] = out);
 }
 
-// blob: lumpy sphere, normals blended toward an external center (fluffy canopy shading)
+// blob: lumpy sphere, normals blended toward an external center (fluffy canopy shading); o.card is its material
 export function addBlob(mb, C, r, detail, o) {
   const dirs = icoDirs(detail), ncen = o.ncenter || C, nb = o.nblend != null ? o.nblend : 0.6, lump = o.lump != null ? o.lump : 0.25, sq = o.squash || 1, seed = o.seed || 0;
   for (let t = 0; t < dirs.length; t += 3) {
@@ -61,7 +135,7 @@ export function addBlob(mb, C, r, detail, o) {
       const f = 1 + lump * (vnoise3(d.x * 2.3 + seed, d.y * 2.3, d.z * 2.3 - seed) - 0.5) * 2;
       const P = V3(C.x + d.x * r * f, C.y + d.y * r * f * sq, C.z + d.z * r * f);
       const nn = P.clone().sub(ncen).normalize().multiplyScalar(nb).add(d.clone().multiplyScalar(1 - nb)).normalize();
-      ids.push(mb.v(P.x, P.y, P.z, nn.x, nn.y, nn.z, o.color(P, d), o.sway(P)));
+      ids.push(mb.v(P.x, P.y, P.z, nn.x, nn.y, nn.z, o.color(P, d), o.sway(P), 0, 0, o.card));
     }
     mb.tri(ids[0], ids[1], ids[2]);
   }
@@ -80,7 +154,7 @@ export function addBlob(mb, C, r, detail, o) {
       const b2 = P.clone().addScaledVector(a2, -sz * 0.3).addScaledVector(d, -sz * 0.18);
       const nn = P.clone().sub(ncen).normalize().multiplyScalar(nb).add(d.clone().multiplyScalar(1 - nb)).normalize();
       const col = o.color(tip, d).clone().multiplyScalar(1.02 + R() * 0.12);
-      const i0 = mb.v(b1.x, b1.y, b1.z, nn.x, nn.y, nn.z, col, o.sway(b1)), i1 = mb.v(b2.x, b2.y, b2.z, nn.x, nn.y, nn.z, col, o.sway(b2)), i2 = mb.v(tip.x, tip.y, tip.z, nn.x, nn.y, nn.z, col, o.sway(tip));
+      const i0 = mb.v(b1.x, b1.y, b1.z, nn.x, nn.y, nn.z, col, o.sway(b1), 0, 0, o.card), i1 = mb.v(b2.x, b2.y, b2.z, nn.x, nn.y, nn.z, col, o.sway(b2), 0, 0, o.card), i2 = mb.v(tip.x, tip.y, tip.z, nn.x, nn.y, nn.z, col, o.sway(tip), 0, 0, o.card);
       mb.tri(i0, i1, i2); mb.tri(i0, i2, i1);
     }
   }

@@ -6,6 +6,7 @@ import { KIND_DOCS } from '../objects/kinds.js';
 import { SCHEMA, SIGS } from '../runtime/schema.js';
 import { U } from '../render/uniforms.js';
 import { textureToDataURL } from '../render/texgen.js';
+import { LOD } from '../render/props.js';
 
 export function installAgentAPI(ed, canvas) {
   window.mapEditor = {
@@ -29,7 +30,8 @@ export function installAgentAPI(ed, canvas) {
     input: (o) => ed.setInput(o),
     player: () => ed.player(),
     // escape hatch for debugging: the live three.js objects and shared uniforms
-    debug: { renderer: ed.renderer, scene: ed.scene, camera: ed.camera, controls: ed.controls, uniforms: U, world: () => ed.worldGroup(),
+    // lod: LOD tuning (src/render/props.js) — fade seconds, force a level, bias the switch distances
+    debug: { renderer: ed.renderer, scene: ed.scene, camera: ed.camera, controls: ed.controls, uniforms: U, world: () => ed.worldGroup(), lod: LOD,
       // baked material textures as PNG data URLs: { rock: { albedo, normal }, sward: …, dirt: … }
       textures: () => Object.fromEntries(Object.entries(ed.textures).map(([k, t]) => [k, { albedo: textureToDataURL(ed.renderer, t.targets[0]), normal: textureToDataURL(ed.renderer, t.targets[1]) }])) }
   };

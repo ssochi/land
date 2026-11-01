@@ -62,6 +62,7 @@ export function makeAPI(session) {
     flatten: (x, z, o = {}) => terr('flatten', Object.assign({ x, z }, o)),
     plateau: (x, z, o = {}) => terr('plateau', Object.assign({ x, z }, o)),
     terrace: (x, z, o = {}) => terr('terrace', Object.assign({ x, z }, o)),
+    ledges: (x, z, o = {}) => terr('ledges', Object.assign({ x, z }, o)),
     smooth: (x, z, o = {}) => terr('smooth', Object.assign({ x, z }, o)),
     erode: (o = {}) => terr('erode', o, (p, r) => add(r, `${p.droplets} 滴 · ${p.grid}`)),
     thermal: (o = {}) => terr('thermal', o, (p, r) => add(r, `${p.iterations} 轮 · 安息角 ${p.talus}°`)),
@@ -103,7 +104,7 @@ export function makeAPI(session) {
     village: (o = {}) => call('village', o, (p, r) => { late(r); ensureWater(); world.objectsTouched = true; return buildVillage(p, r); }),
     building: (x, z, o = {}) => call('building', Object.assign({ x, z }, o), (p, r) => {
       if (p.flatten) late(r); ensureWater(); world.objectsTouched = true;
-      const params = {}; for (const k of ['style', 'front', 'width', 'depth', 'floors', 'roof', 'pitch', 'chimney', 'tower', 'banner', 'porch', 'tint']) if (p[k] != null) params[k] = p[k];
+      const params = {}; for (const k of ['style', 'front', 'width', 'depth', 'floors', 'roof', 'roofShape', 'pitch', 'chimney', 'tower', 'towerShape', 'wings', 'dormers', 'pergola', 'deck', 'lean', 'sign', 'ivy', 'laundry', 'warp', 'banner', 'porch', 'tint']) if (p[k] != null) params[k] = p[k];
       const h = buildHouse(p.x, p.z, p.rotation, params, p.seed + 1, p.flatten);
       add(r, `${h.style} · ${h.width}×${h.depth}m · ${h.floors} 层`);
       return h;

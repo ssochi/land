@@ -5,7 +5,7 @@
 import { clamp, smooth } from '../core/math.js';
 import { fbm, vnoise } from '../core/noise.js';
 import { DETAIL, detailW } from '../world/grid.js';
-import { COVER, OCC, PATH } from '../world/fields.js';
+import { COVER, OCC, PATH, LAWN } from '../world/fields.js';
 import { ruleCheck, forEachObstacle, emptyRejectStats, topRejects } from './placement.js';
 import { groundAt } from '../terrain/crag.js';
 
@@ -60,10 +60,13 @@ export function distributeGrass(densityScale) {
       if (edgeW <= 0) continue;
       if (!ruleCheck(x, z, rl, stats)) continue;
       const patch = vnoise(x * 0.07 + 11, z * 0.07 - 4);
-      const d = densityScale * p.density * (46 + (12 - 46) * smooth(4, rad, rc)) * (0.72 + 0.56 * patch) * edgeW * free[k];   // blades per m²
+      // a village's grass is grazed and trodden short (LAWN): lower and a little denser, a smooth green carpet
+      // with the odd longer tuft (the tuft variation in the renderer stays)
+      const lawn = LAWN[k];
+      const d = densityScale * p.density * (46 + (12 - 46) * smooth(4, rad, rc)) * (0.72 + 0.56 * patch) * edgeW * free[k] * (1 + 0.2 * lawn);   // blades per m²
       if (d <= 0) continue;
       const tallN = vnoise(x * 0.09 - 3, z * 0.09 + 8);
-      const h = (0.24 + tallN * 0.34) * p.height * (0.45 + 0.55 * edgeW);   // metres before per-blade and tuft variation
+      const h = (0.24 + tallN * 0.34) * p.height * (0.45 + 0.55 * edgeW) * (1 - 0.6 * lawn);   // metres before per-blade and tuft variation
       tall[k] = dens[k] > 0 ? (tall[k] * dens[k] + h * d) / (dens[k] + d) : h;
       dens[k] += d;
       count += d * st * st;

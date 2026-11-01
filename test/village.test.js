@@ -2,8 +2,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { generate } from './helpers.js';
+import * as THREE from 'three';
 import { makeHouse, houseParams } from '../src/objects/buildings.js';
 import { INST } from '../src/objects/placement.js';
+import { KINDS, lodLevels } from '../src/objects/kinds.js';
 
 test('house models: every style and front builds clean geometry, and LOD levels shed detail', () => {
   for (const style of ['hateno', 'stone', 'timber', 'hut']) for (const front of ['eave', 'gable']) {
@@ -22,11 +24,70 @@ test('house models: every style and front builds clean geometry, and LOD levels 
   assert.equal(g.userData.smoke.length, 1);
 });
 
+// a LOD level that changes the model's outline (a different chimney height, a dropped porch, a bigger crate)
+// shows as a jump however well it cross-fades: every level must fill the same box (to within the few
+// centimetres the close-up level's single eave tiles hang out)
+test('LOD levels of houses and props are the same model: same bounds at every level', () => {
+  const bounds = g => { g.computeBoundingBox(); return g.boundingBox; };
+  for (const style of ['hateno', 'stone', 'timber', 'hut']) for (const seed of [3, 11, 27]) {
+    const P = { style, tower: style === 'hateno', banner: true, porch: style !== 'hateno' }, b0 = bounds(makeHouse(seed, 0, P));
+    for (const lod of [1, 2]) {
+      const b = bounds(makeHouse(seed, lod, P));
+      for (const k of ['min', 'max']) assert.ok(b[k].distanceTo(b0[k]) < 0.15, `${style} #${seed} lod ${lod}: ${k} ${b[k].toArray().map(v => v.toFixed(2))} vs ${b0[k].toArray().map(v => v.toFixed(2))}`);
+    }
+  }
+  for (const kind of Object.keys(KINDS).filter(k => KINDS[k].mat === 'building' && !k.startsWith('house') && lodLevels(k) > 1)) {
+    const b0 = bounds(KINDS[kind].make(1001, 0)), size = b0.getSize(new THREE.Vector3()).length();
+    for (let lod = 1; lod < lodLevels(kind); lod++) {
+      const b = bounds(KINDS[kind].make(1001, lod));
+      assert.ok(b.min.distanceTo(b0.min) < 0.04 * size && b.max.distanceTo(b0.max) < 0.04 * size, `${kind} lod ${lod}: bounds match`);
+    }
+  }
+});
+
+// compound massing and attachments, including a wing given with only some of its fields
+test('compound houses: wings, towers, dormers and attachments build clean geometry, the same box at every level', () => {
+  const bounds = g => { g.computeBoundingBox(); return g.boundingBox; };
+  const sets = [
+    { style: 'hateno', floors: 2, tower: true, towerShape: 'square', dormers: 2, wings: [{ side: 'b', a: 2 }], pergola: true, deck: true, lean: true, sign: true, ivy: true },
+    { style: 'hateno', front: 'gable', roofShape: 'hip', tower: true, towerShape: 'round', wings: [{ side: 'f' }, { side: 'b', floors: 1, w: 3 }], lean: true, deck: true },
+    { style: 'stone', floors: 2, wings: [{ side: 'b', a: -9, w: 40, e: 5 }], pergola: true, ivy: true }
+  ];
+  for (const P of sets) for (const seed of [4, 19]) {
+    const Q = houseParams(seed, P);
+    for (const W of Q.wings) assert.ok(['f', 'b'].includes(W.side) && W.w > 0 && W.e > 0 && [1, 2].includes(W.floors) && Math.abs(W.a) + W.w / 2 <= (Q.front === 'gable' ? Q.depth : Q.width) / 2, `wing ${JSON.stringify(W)}`);
+    const g0 = makeHouse(seed, 0, P), b0 = bounds(g0);
+    for (const lod of [0, 1, 2]) {
+      const g = lod ? makeHouse(seed, lod, P) : g0, b = bounds(g);
+      assert.ok(g.attributes.position.array.every(Number.isFinite) && g.attributes.normal.array.every(Number.isFinite), `${P.style} #${seed} lod ${lod}: finite`);
+      for (const k of ['min', 'max']) assert.ok(b[k].distanceTo(b0[k]) < 0.15, `${P.style} #${seed} lod ${lod}: ${k} ${b[k].toArray().map(v => v.toFixed(2))} vs ${b0[k].toArray().map(v => v.toFixed(2))}`);
+    }
+  }
+});
+
 test('house parameters: pinned choices survive a different seed, so plan and model agree', () => {
   const P = houseParams(42, { style: 'hateno' }), { lot, door, ...keep } = P;
   const Q = houseParams(9001, keep);
-  for (const k of ['style', 'front', 'width', 'depth', 'floors', 'roof', 'chimney', 'tower', 'towerSide', 'chimSide', 'banner', 'wash', 'doorA']) assert.deepEqual(Q[k], P[k], k);
+  for (const k of ['style', 'front', 'width', 'depth', 'floors', 'roof', 'chimney', 'tower', 'towerSide', 'chimSide', 'banner', 'quoins', 'wash', 'doorA']) assert.deepEqual(Q[k], P[k], k);
   assert.deepEqual(Q.door, door);
+});
+
+test('windows are set back in holes cut through the wall near by, and sit flush on the far model', () => {
+  const P = { style: 'hateno', front: 'eave', tower: false, chimney: false, width: 8, depth: 6, wings: [], dormers: 0, warp: false };   // as built, before the hand-made warp
+  const glassDepth = lod => {
+    const g = makeHouse(7, lod, P), p = g.attributes.position.array, k = g.attributes.aCard.array;
+    let inset = 0, n = 0;
+    for (let i = 0; i < k.length; i++) if (k[i] === 6 && Math.abs(p[i * 3 + 2]) > 2.5) { inset = Math.max(inset, 3 - Math.abs(p[i * 3 + 2])); n++; }   // front and back walls at z = ±3
+    return { inset, n };
+  };
+  const near = glassDepth(0), far = glassDepth(2);
+  assert.ok(near.n > 0 && near.inset > 0.2, `near: glass ${near.inset.toFixed(2)}m behind the wall`);
+  assert.ok(far.inset < 0.01, `far: glass flush (${far.inset.toFixed(3)})`);
+  // the stucco carries the height above the wall's foot in v (the shader wears the plaster off there)
+  const g = makeHouse(7, 0, P), uv = g.attributes.aUV.array, k = g.attributes.aCard.array, p = g.attributes.position.array;
+  let ok = true;
+  for (let i = 0; i < k.length; i++) if (k[i] === 8 && Math.abs(p[i * 3 + 2]) > 2.99) ok = ok && Math.abs(uv[i * 2 + 1] - (p[i * 3 + 1] - 0.5)) < 1e-4;
+  assert.ok(ok, 'wall v = height above the foot');
 });
 
 test('flatten cut mode only lowers ground', async () => {

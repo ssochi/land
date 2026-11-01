@@ -18,7 +18,7 @@ defineScene((m) => {
   m.path([[-60, 6], [-20, -4], [20, -6], [60, 2]], { width: 4.5, flatten: 0.8 });
   [[-24, -16], [-11, -19], [1, -20], [13, -19], [25, -17]].forEach(([x, z], i) => m.place('ruin.pillar', x, z, { scale: 0.55, variant: i % 3, rotation: 0.2 * i }));
 
-  m.place('tree.big', 21, -9, { scale: 1.15, variant: 0, rotation: 2.4 });                  // 右上角的大树
+  m.place('tree.big', 12.5, -11.5, { scale: 1.15, variant: 0, rotation: 2.4 });            // 右上角的大树（树干在画面约 93% 宽处）
   m.place('tree.oak', -15, -26, { scale: 0.55, variant: 1 });                               // 石墩旁的小树
   m.scatter('bush', { count: 14, area: m.rect(-30, -30, 30, -18), seed: 3 });
   m.scatter('tree.oak', { count: 12, area: m.ring(0, -120, 120, 260), rules: { slope: [0, 0.3] }, minSpacing: 25, seed: 4 });

@@ -1,7 +1,7 @@
 // Height-shaping terrain ops. Each takes validated params (see src/runtime/schema.js) and edits both grids.
-import { smooth } from '../core/math.js';
+import { smooth, mulberry32 } from '../core/math.js';
 import { fbm, ridged, billow, erodedFbm } from '../core/noise.js';
-import { DETAIL, GRIDS } from '../world/grid.js';
+import { DETAIL, GRIDS, heightAt } from '../world/grid.js';
 
 function radialMask(m, x, z) {
   if (!m) return 1;
@@ -96,13 +96,51 @@ export function plateau(p) {
   });
 }
 
-// quantise heights into terraces inside a radius: flat treads, steep risers (`sharpness` = riser share of a step)
+// quantise heights into terraces inside a radius: flat treads, steep risers (`sharpness` = riser share of a step).
+// warp (metres of height) shifts where each riser falls with smooth noise, so the ledges wander across the slope
+// instead of tracing its contour lines exactly
 export function terrace(p) {
+  const wp = p.warp || 0, s = p.seed || 0;
   eachCell((x, z, h) => {
     const w = smooth(p.radius + p.falloff, p.radius, Math.hypot(x - p.x, z - p.z));
     if (w <= 0) return h;
-    const q = h / p.step, f = Math.floor(q);
+    const o = wp ? (fbm(x * 0.03, z * 0.03, 3, s + 21) - 0.5) * 2 * wp : 0, q = (h + o) / p.step, f = Math.floor(q);
     return h + ((f + smooth(1 - p.sharpness, 1, q - f)) * p.step - h) * w;
+  });
+}
+
+// Rock shelves (Hateno's ledges): the ground inside the radius breaks into flat shelves, each a cell of a
+// jittered grid (warped so the outlines wander) set at the hill's own height at its centre ± a little, so the
+// shelves climb the slope in steps of uneven height. Between two shelves the ground drops over a band whose
+// width shrinks as the drop grows: shelves of nearly the same height run into each other in a gentle ramp,
+// big drops become cliffs (which the terrain shader paints as rock and the mesh roughens into crags).
+//   size: mean shelf width (m) · tilt: how much of the original slope a shelf keeps (0 flat) · jitter: ± metres
+//   on a shelf's height · cliff: half-width of the drop band at a big drop · warp: metres the outlines wander
+export function ledges(p) {
+  const size = p.size, R = mulberry32(p.seed * 7919 + 17), reach = p.radius + p.falloff + size;
+  const nI = Math.ceil(2 * reach / size) + 1, cells = [];
+  for (let j = 0; j < nI; j++) for (let i = 0; i < nI; i++) {
+    const sx = p.x - reach + (i + 0.2 + 0.6 * R()) * size, sz = p.z - reach + (j + 0.2 + 0.6 * R()) * size;
+    cells.push({ x: sx, z: sz, h: heightAt(sx, sz) + (R() - 0.5) * 2 * p.jitter });
+  }
+  const at = (i, j) => (i >= 0 && j >= 0 && i < nI && j < nI ? cells[j * nI + i] : null);
+  eachCell((x, z, h) => {
+    const w = smooth(p.radius + p.falloff, p.radius, Math.hypot(x - p.x, z - p.z));
+    if (w <= 0) return h;
+    const wx = x + (fbm(x * 0.03, z * 0.03, 3, p.seed + 31) - 0.5) * 2 * p.warp, wz = z + (fbm(x * 0.03 + 7, z * 0.03 - 4, 3, p.seed + 32) - 0.5) * 2 * p.warp;
+    const ci = Math.floor((wx - p.x + reach) / size), cj = Math.floor((wz - p.z + reach) / size);
+    let c1 = null, c2 = null, d1 = 1e9, d2 = 1e9;
+    for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) {
+      const c = at(ci + a, cj + b); if (!c) continue;
+      const d = Math.hypot(wx - c.x, wz - c.z);
+      if (d < d1) { d2 = d1; c2 = c1; d1 = d; c1 = c; } else if (d < d2) { d2 = d; c2 = c; }
+    }
+    if (!c1) return h;
+    const shelf = c => c.h + (h - c.h) * p.tilt;
+    if (!c2) return h + (shelf(c1) - h) * w;
+    const e = (d2 - d1) / 2, jump = Math.abs(c1.h - c2.h), band = p.cliff + Math.max(0, 3.5 - jump) * 2.2;
+    const mid = (shelf(c1) + shelf(c2)) / 2, t = smooth(0, band, e);
+    return h + (mid + (shelf(c1) - mid) * t - h) * w;
   });
 }
 
