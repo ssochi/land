@@ -1,6 +1,7 @@
 {
   "name": "land",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "description": "面向 agent 的 three.js 场景引擎：用 scene.js 代码生成地形、水体、植被并渲染风格化原野",
   "type": "module",
   "scripts": {
